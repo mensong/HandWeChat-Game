@@ -1,0 +1,262 @@
+{
+  "api_base_url": "http://127.0.0.1:8000",
+  "api_timeout_seconds": 30,
+  "poll_timeout_seconds": 25,
+  "poll_limit": 100,
+  "health_poll_seconds": 2,
+  "timezone": "Asia/Shanghai",
+  "allow_hash_prefix": true,
+  "ignore_senders": [
+    "我",
+    "对方",
+    "未知",
+    ""
+  ],
+  "dedupe_window_seconds": 5,
+  "command_rate_limit_seconds": 2,
+  "help_cooldown_seconds": 60,
+  "usage_hint_cooldown_seconds": 60,
+  "reply_max_chars": 500,
+  "send_max_per_minute": 15,
+  "send_min_interval_ms": 1500,
+  "send_queue_max": 100,
+  "send_task_timeout_seconds": 30,
+  "allowed_groups": [],
+  "group_title_stable_seconds": 10,
+  "initial_coins": 200,
+  "auto_create_target": true,
+  "charm_base": 10,
+  "charm_decay_period_days": 7,
+  "charm_decay_rate": 0.1,
+  "max_slaves": 30,
+  "slave_price_coeff": 2,
+  "slave_price_random_min": 0,
+  "slave_price_random_max": 10,
+  "min_slave_price": 10,
+  "release_reward_coeff": 2,
+  "slave_work_cooldown_minutes": 30,
+  "slave_work_max_per_day": 8,
+  "rebel_cooldown_minutes": 180,
+  "rebel_max_per_day": 3,
+  "rebel_master_coeff": 1,
+  "rebel_slave_coeff": 1,
+  "rebel_master_multipliers": [
+    0,
+    1,
+    2
+  ],
+  "rebel_slave_multipliers": [
+    0,
+    0.5,
+    1
+  ],
+  "rebel_loot_max": 500,
+  "rebel_ransom_max": 500,
+  "rebel_compensation_max": 200,
+  "signin_base_reward": 10,
+  "signin_streak_step": 2,
+  "signin_max_reward": 24,
+  "transfer_tax_rate": 0.05,
+  "transfer_daily_limit": 5000,
+  "gift_max_quantity": 99,
+  "gift_daily_spend_limit": 20000,
+  "gift_rank_days": 30,
+  "health_port": 8001,
+  "gifts": [
+    {
+      "id": "rose",
+      "name": "玫瑰",
+      "aliases": [
+        "rose",
+        "玫瑰花"
+      ],
+      "price": 10,
+      "charm": 1
+    },
+    {
+      "id": "lollipop",
+      "name": "棒棒糖",
+      "aliases": [
+        "lollipop"
+      ],
+      "price": 20,
+      "charm": 2
+    },
+    {
+      "id": "chocolate",
+      "name": "巧克力",
+      "aliases": [
+        "chocolate"
+      ],
+      "price": 52,
+      "charm": 5
+    },
+    {
+      "id": "cake",
+      "name": "蛋糕",
+      "aliases": [
+        "cake"
+      ],
+      "price": 99,
+      "charm": 10
+    },
+    {
+      "id": "perfume",
+      "name": "香水",
+      "aliases": [
+        "perfume"
+      ],
+      "price": 199,
+      "charm": 20
+    },
+    {
+      "id": "ring",
+      "name": "戒指",
+      "aliases": [
+        "ring"
+      ],
+      "price": 520,
+      "charm": 52
+    },
+    {
+      "id": "car",
+      "name": "跑车",
+      "aliases": [
+        "car"
+      ],
+      "price": 1314,
+      "charm": 131
+    },
+    {
+      "id": "castle",
+      "name": "城堡",
+      "aliases": [
+        "castle"
+      ],
+      "price": 5200,
+      "charm": 520
+    }
+  ],
+  "work_events": [
+    {
+      "text": "在奶茶店做帮工，表现优越",
+      "coins_min": 2,
+      "coins_max": 2,
+      "weight": 6
+    },
+    {
+      "text": "扶老奶奶过马路",
+      "coins_min": 3,
+      "coins_max": 3,
+      "weight": 6
+    },
+    {
+      "text": "在工地搬砖，汗流浃背",
+      "coins_min": 4,
+      "coins_max": 4,
+      "weight": 6
+    },
+    {
+      "text": "帮邻居修电脑，收到红包",
+      "coins_min": 5,
+      "coins_max": 5,
+      "weight": 6
+    },
+    {
+      "text": "在夜市摆摊，生意兴隆",
+      "coins_min": 6,
+      "coins_max": 6,
+      "weight": 6
+    },
+    {
+      "text": "捡到钱包归还失主，获得酬谢",
+      "coins_min": 3,
+      "coins_max": 3,
+      "weight": 6
+    },
+    {
+      "text": "替人排队买奶茶",
+      "coins_min": 2,
+      "coins_max": 2,
+      "weight": 6
+    },
+    {
+      "text": "在餐厅端盘子，拿到小费",
+      "coins_min": 4,
+      "coins_max": 4,
+      "weight": 6
+    },
+    {
+      "text": "帮主人跑腿送快递",
+      "coins_min": 3,
+      "coins_max": 3,
+      "weight": 6
+    },
+    {
+      "text": "参加搬家公司临时工",
+      "coins_min": 5,
+      "coins_max": 5,
+      "weight": 6
+    },
+    {
+      "text": "扶起摔倒老人，被讹",
+      "coins_min": -5,
+      "coins_max": -5,
+      "weight": 5
+    },
+    {
+      "text": "打工时打碎盘子，赔偿",
+      "coins_min": -3,
+      "coins_max": -3,
+      "weight": 5
+    },
+    {
+      "text": "上班摸鱼被扣工资",
+      "coins_min": -2,
+      "coins_max": -2,
+      "weight": 5
+    },
+    {
+      "text": "骑车送外卖超时，被罚款",
+      "coins_min": -4,
+      "coins_max": -4,
+      "weight": 5
+    },
+    {
+      "text": "被骗子骗走零钱",
+      "coins_min": -6,
+      "coins_max": -6,
+      "weight": 5
+    },
+    {
+      "text": "在工地偷懒被发现，扣钱",
+      "coins_min": -3,
+      "coins_max": -3,
+      "weight": 5
+    },
+    {
+      "text": "在公园长椅上睡了一整天",
+      "coins_min": 0,
+      "coins_max": 0,
+      "weight": 2.5
+    },
+    {
+      "text": "去面试被拒，白跑一趟",
+      "coins_min": 0,
+      "coins_max": 0,
+      "weight": 2.5
+    },
+    {
+      "text": "帮主人看家，无功无过",
+      "coins_min": 0,
+      "coins_max": 0,
+      "weight": 2.5
+    },
+    {
+      "text": "追公交车追了两条街，没赶上",
+      "coins_min": 0,
+      "coins_max": 0,
+      "weight": 2.5
+    }
+  ]
+}
