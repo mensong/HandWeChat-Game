@@ -50,3 +50,10 @@ class Command:
     amount: Optional[int] = None
     gift: Optional[str] = None
     count: Optional[int] = None
+
+
+@dataclass
+class Pat:
+    pat: str
+    patted: str
+    what: str = ""

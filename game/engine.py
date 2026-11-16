@@ -8,7 +8,9 @@ from collections import deque
 from .config import Config
 from .context import Ctx
 from .dispatcher import Dispatcher
-from .parser import HELP_COMMANDS, parse, usage_hint
+from .models import Pat
+from .parser import HELP_COMMANDS, parse, parse_pat, usage_hint
+from .replies import pat_reply
 from .store import Store
 from .util import fmt_iso, normalize_text, normalize_title
 
@@ -58,6 +60,7 @@ class Engine:
         self._last_help: dict[tuple[str, str], float] = {}
         self._last_usage: dict[tuple[str, str], float] = {}
         self._last_error: dict[tuple[str, str], float] = {}
+        self._last_pat: dict[tuple[str, str], float] = {}
         self.paused = False
         self._paused_group: str | None = None
         self.cursor = 0
@@ -92,8 +95,6 @@ class Engine:
 
     def handle_message(self, msg: dict) -> None:
         sender = (msg.get("sender") or "").strip()
-        if sender in self.cfg.get("ignore_senders"):
-            return
         text = normalize_text(msg.get("content"), self.cfg.get("allow_hash_prefix"))
         if not text:
             return
@@ -101,8 +102,6 @@ class Engine:
         group = self.tracker.key
         if not group or self.paused:
             return
-        self.store.upsert_player(group, sender, fmt_iso(now),
-                                 self.cfg.get("initial_coins"), self.cfg.get("charm_base"))
         mid = str(msg.get("id"))
         if not self._mark_seen_id(mid):
             self.log.info("dup message id: %s", mid)
@@ -110,6 +109,16 @@ class Engine:
         if self._content_dupe(group, sender, text, now):
             self.log.info("dup content: group=%s sender=%s", group, sender)
             return
+        # 拍一拍是居中系统行，OCR 把 sender 标成"我"，需赶在 ignore_senders 之前解析；
+        # 参与双方只能从正文取，不能依赖 sender。
+        pat = parse_pat(text)
+        if pat is not None:
+            self._handle_pat(group, pat, now)
+            return
+        if sender in self.cfg.get("ignore_senders"):
+            return
+        self.store.upsert_player(group, sender, fmt_iso(now),
+                                 self.cfg.get("initial_coins"), self.cfg.get("charm_base"))
         cmd = parse(text, self.cfg)
         started = time.monotonic()
         if cmd is None:
@@ -180,6 +189,25 @@ class Engine:
         tracker[(group, sender)] = now.timestamp()
         if self._sender is not None:
             self._sender.enqueue(text)
+
+    def _handle_pat(self, group: str, pat: Pat, now) -> None:
+        if not self.cfg.is_bot(pat.patted):
+            return
+        texts = self.cfg.get("pat_reply_texts")
+        if not texts:
+            return
+        key = (group, pat.pat)
+        last = self._last_pat.get(key)
+        if last is not None and (now.timestamp() - last) < self.cfg.get("pat_reply_cooldown_seconds"):
+            self.log.info("pat cooldown: group=%s pat=%s", group, pat.pat)
+            return
+        self._last_pat[key] = now.timestamp()
+        started = time.monotonic()
+        reply = pat_reply(self.rng.choice(texts), pat.pat, pat.patted, pat.what)
+        self._log_command(group, pat.pat, "pat", "ok", started,
+                          detail=reply.split("\n", 1)[0][:120])
+        if self._sender is not None:
+            self._sender.enqueue(reply)
 
     def add_event(self, kind: str, **fields) -> None:
         entry = {"ts": fmt_iso(self.clock()), "kind": kind}

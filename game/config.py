@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 DEFAULTS = {
@@ -17,6 +18,11 @@ DEFAULTS = {
     "help_cooldown_seconds": 60,
     "usage_hint_cooldown_seconds": 60,
     "reply_max_chars": 500,
+
+    "bot_name": "",
+    "bot_name_aliases": [],
+    "pat_reply_texts": [],
+    "pat_reply_cooldown_seconds": 10,
 
     "send_max_per_minute": 15,
     "send_min_interval_ms": 1500,
@@ -77,7 +83,7 @@ _INT_KEYS = [
     "rebel_ransom_max", "rebel_compensation_max",
     "signin_base_reward", "signin_streak_step", "signin_max_reward",
     "transfer_daily_limit", "gift_max_quantity", "gift_daily_spend_limit",
-    "gift_rank_days", "health_port",
+    "gift_rank_days", "health_port", "pat_reply_cooldown_seconds",
 ]
 _FLOAT_KEYS = [
     "charm_base", "charm_decay_rate", "slave_price_coeff", "slave_price_random_min",
@@ -168,6 +174,13 @@ class Config:
             raise ConfigError("allowed_groups must be a list")
         if not isinstance(d["ignore_senders"], list):
             raise ConfigError("ignore_senders must be a list")
+        if not isinstance(d["bot_name"], str):
+            raise ConfigError("bot_name must be a string")
+        for k in ("bot_name_aliases", "pat_reply_texts"):
+            if not isinstance(d[k], list) or any(not isinstance(x, str) for x in d[k]):
+                raise ConfigError(f"{k} must be a list of strings")
+        if d["pat_reply_cooldown_seconds"] < 0:
+            raise ConfigError("pat_reply_cooldown_seconds must be >= 0")
         for k in ("rebel_master_multipliers", "rebel_slave_multipliers"):
             if not isinstance(d[k], list) or not d[k]:
                 raise ConfigError(f"{k} must be a non-empty list")
@@ -180,6 +193,14 @@ class Config:
             if g.name.lower() == t or any(a.lower() == t for a in g.aliases):
                 return g
         return None
+
+    @property
+    def bot_names(self) -> frozenset[str]:
+        names = [self.get("bot_name"), *self.get("bot_name_aliases")]
+        return frozenset(re.sub(r"\s+", "", n) for n in names if n.strip())
+
+    def is_bot(self, name: str) -> bool:
+        return name in self.bot_names
 
 
 def models_Gift(g: dict):

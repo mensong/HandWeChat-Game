@@ -15,6 +15,14 @@
   "help_cooldown_seconds": 60,
   "usage_hint_cooldown_seconds": 60,
   "reply_max_chars": 500,
+  "bot_name": "饭人休闲传",
+  "bot_name_aliases": [],
+  "pat_reply_texts": [
+    "{pat} 拍了拍我\n我也拍了拍 {pat}～",
+    "别拍啦 {pat}\n再拍要收费了！",
+    "{pat} 拍了拍我{what}\n我记住你了！"
+  ],
+  "pat_reply_cooldown_seconds": 10,
   "send_max_per_minute": 15,
   "send_min_interval_ms": 1500,
   "send_queue_max": 100,
@@ -256,5 +264,6 @@
       "coins_max": 0,
       "weight": 2.5
     }
-  ]
+  ],
+  "web_host": ""
 }

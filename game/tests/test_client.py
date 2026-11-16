@@ -32,8 +32,6 @@ class FakeApi:
             if task_id not in self.replies:
                 return 404, {"code": "SEND_TASK_NOT_FOUND", "message": "not found"}
             return 200, self.replies[task_id]
-        if method == "POST" and path in ("/api/v1/listener/start", "/api/v1/attach"):
-            return 200, {"status": "running"}
         return 404, {"code": "NOT_FOUND", "message": "no route"}
 
 
@@ -78,8 +76,6 @@ def test_client_end_to_end(fake_api):
         resp = await client.send("测试消息")
         task = await client.send_task(resp["task_id"])
         assert task["status"] == "success"
-        await client.start_listener()
-        await client.attach()
 
     asyncio.run(run())
 

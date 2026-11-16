@@ -110,12 +110,6 @@ class WechatClient:
     async def health(self) -> dict:
         return await self._request("GET", "/api/v1/health")
 
-    async def attach(self) -> dict:
-        return await self._request("POST", "/api/v1/attach", body={})
-
-    async def start_listener(self) -> dict:
-        return await self._request("POST", "/api/v1/listener/start", body={})
-
     async def send(self, text: str) -> dict:
         return await self._request("POST", "/api/v1/send", body={"text": text})
 

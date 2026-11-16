@@ -1,4 +1,5 @@
 """端到端处理器测试（内存库 + 固定随机源）。"""
+from game.replies import pat_reply
 from game.rng import Rng
 
 
@@ -435,3 +436,54 @@ def test_gift_unknown_glued(env):
 def test_exact_command_with_random_spaces(env):
     reply = env.send("张三", "签  到")
     assert "签到成功" in reply
+
+
+# ---------- 拍一拍 ----------
+
+def test_pat_bot_replies(env):
+    template = env.cfg.get("pat_reply_texts")[0]
+    env.rng.set_sequence([template])
+    reply = env.send("我", "“是你的益达”拍了拍“童声微蔓”")
+    assert reply == pat_reply(template, "是你的益达", "童声微蔓", "")
+    # 系统行的 sender 是"我"，不能因此注册成玩家
+    assert env.store.get_player(env.group, "我") is None
+
+
+def test_pat_bot_alias_and_what(env):
+    template = env.cfg.get("pat_reply_texts")[0]
+    env.rng.set_sequence([template])
+    reply = env.send("我", "“是你的益达”拍了拍“童声徽蔓”叫了一声“嗯~”")
+    assert reply == pat_reply(template, "是你的益达", "童声徽蔓", "叫了一声“嗯~”")
+
+
+def test_pat_other_member_silent(env):
+    env.send("我", "“是你的益达”拍了拍“老婆”")
+    assert env.sender.sent == []
+
+
+def test_pat_reply_cooldown(env):
+    texts = env.cfg.get("pat_reply_texts")
+    env.rng.set_sequence([texts[0], texts[0]])
+    env.send("我", "“A”拍了拍“童声微蔓”")
+    assert len(env.sender.sent) == 1
+    env.clock.advance(seconds=3)  # 距上次 6 秒，仍在 10 秒冷却内
+    env.send("我", "“A”拍了拍“童声微蔓”叫了一声“嗯~”", advance=0)
+    assert len(env.sender.sent) == 1
+    env.clock.advance(seconds=10)
+    env.send("我", "“A”拍了拍“童声微蔓”叫了一声“嘿嘿”", advance=0)
+    assert len(env.sender.sent) == 2
+
+
+def test_pat_disabled_without_texts(env):
+    from game.config import Config
+    from game.engine import Engine
+    data = {k: env.cfg.get(k) for k in env.cfg._data}
+    data["pat_reply_texts"] = []
+    engine2 = Engine(Config(data), env.store, env.clock, env.rng, env.engine.ctx.log)
+    engine2.attach_sender(env.sender)
+    engine2.handle_health({"chat_title": "888 种田大队(32)",
+                           "online": True, "listener_running": True})
+    engine2.handle_message({"id": "600", "cursor": 600, "sender": "我",
+                            "content": "“A”拍了拍“童声微蔓”",
+                            "received_at": env.clock.t.isoformat()})
+    assert env.sender.sent == []

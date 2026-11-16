@@ -36,7 +36,7 @@ def setup_logging(log_dir: Path) -> None:
 
 
 async def bootstrap(client: WechatClient, engine: Engine) -> None:
-    """等待微信在线并启动 OCR 监听；连接前已产生的消息不回补。"""
+    """等待微信在线；OCR 监听由使用端负责，本服务不主动启动。连接前已产生的消息不回补。"""
     while True:
         try:
             h = await client.health()
@@ -50,13 +50,8 @@ async def bootstrap(client: WechatClient, engine: Engine) -> None:
             await asyncio.sleep(10)
             continue
         break
-    if not h.get("listener_running"):
-        try:
-            await client.start_listener()
-            log.info("ocr listener started")
-        except ApiError as e:
-            log.error("listener start failed: %s", e)
-    log.info("startup: backlog skipped, waiting for websocket messages")
+    log.info("wechat online, listener_running=%s, waiting for websocket messages",
+             bool(h.get("listener_running")))
 
 
 async def ws_loop(client: WechatClient, engine: Engine) -> None:
@@ -82,16 +77,6 @@ async def ws_loop(client: WechatClient, engine: Engine) -> None:
             engine.last_error = f"ws: {e.code}"
             engine.add_event(kind="ws_error", message=str(e))
             log.warning("websocket error: %s", e)
-            if e.code in ("WECHAT_OFFLINE", "ATTACH_FAILED"):
-                try:
-                    await client.attach()
-                except ApiError as e2:
-                    log.warning("attach failed: %s", e2)
-            elif e.code == "OCR_CHANNEL_NOT_RUNNING":
-                try:
-                    await client.start_listener()
-                except ApiError as e2:
-                    log.warning("listener start failed: %s", e2)
         except Exception as e:
             engine.last_error = "ws: unexpected"
             engine.add_event(kind="ws_error", message=type(e).__name__)

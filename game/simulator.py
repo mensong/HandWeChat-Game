@@ -338,6 +338,12 @@ const META = [
     ["usage_hint_cooldown_seconds", "用法提示冷却（秒）", "num", ""],
     ["reply_max_chars", "单条回复上限（字符）", "num", "超长自动拆条"],
   ]},
+  {group: "拍一拍", items: [
+    ["bot_name", "机器人昵称", "text", "被拍名字与它精确匹配才回复"],
+    ["bot_name_aliases", "昵称别名（数组）", "json", "OCR 易混淆的写法，可留空"],
+    ["pat_reply_texts", "回复文案（数组）", "json", "支持 {pat} {patted} {what}；空数组 = 关闭"],
+    ["pat_reply_cooldown_seconds", "每人回复冷却（秒）", "num", ""],
+  ]},
   {group: "发送限速", items: [
     ["send_max_per_minute", "每分钟最多发送（≤20）", "num", ""],
     ["send_min_interval_ms", "两条发送最小间隔（毫秒）", "num", ""],

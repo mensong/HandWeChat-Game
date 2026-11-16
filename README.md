@@ -76,6 +76,21 @@ python -m game.simulator
 - 允许可选 `#` 前缀（`#签到` 等价于 `签到`）。
 - 与游戏无关的消息一律静默忽略，不回复。
 
+## 拍一拍互动
+
+机器人被拍一拍时自动回复。支持两种消息形式：
+
+- `“{动手拍的人}”拍了拍“{被拍的人}”`
+- `“{动手拍的人}”拍了拍“{被拍的人}”{附加消息}`
+
+只有被拍名字与 `bot_name`（或 `bot_name_aliases` 中任一项）精确匹配时才回复，拍其他人
+静默忽略。回复文案从 `pat_reply_texts` 随机取一条，支持变量 `{pat}`（动手拍的人）、
+`{patted}`（被拍的人）、`{what}`（附加消息，没有时为空串）；同一人
+`pat_reply_cooldown_seconds` 秒内只回一次。
+
+拍一拍在 OCR 里是居中系统行，`sender` 会被识别成“我”，因此参与双方全部从正文解析。
+只识别带引号的格式，OCR 丢失引号时按普通消息忽略。
+
 ## 配置
 
 所有可调参数在 `config/game_config.json`：
@@ -88,6 +103,8 @@ python -m game.simulator
 - 礼物：`gifts` 目录（价格与魅力），8 种，10~5200 金币。
 - 打工事件：`work_events`，权重随机，正/负/零比例 60/30/10。
 - 限流：单用户指令间隔 2 秒、帮助冷却 60 秒、出站 15 条/分钟、回复上限 500 字符（超长拆条）。
+- 拍一拍：`bot_name` 机器人昵称、`bot_name_aliases` OCR 易混淆写法、`pat_reply_texts`
+  回复文案数组（空数组即关闭）、`pat_reply_cooldown_seconds` 每人回复冷却。
 - 群：`allowed_groups` 为空表示所有群都处理；否则按规范化群标题白名单。
 
 配置在启动时校验，非法配置拒绝启动。
@@ -115,6 +132,7 @@ python -m game.simulator
    也不补发，避免重放扣费指令。
 5. 发送依赖 OCR 回读校验；`SEND_VERIFY_FAILED` 不重试，避免重复发送。
 6. 消息缓冲在 API 进程内存中，仅适用于单进程单 worker 部署。
+7. 拍一拍只识别带引号的系统行格式；OCR 漏识别引号时不会触发。
 
 ## OCR 空格容错
 
@@ -151,5 +169,6 @@ python -X utf8 -m pytest game/tests -q
 - 修改配置后需重启服务。
 - 需要人工调整金币/魅力/奴隶关系时，直接用 SQLite 客户端改 `data/game.db`
   （服务运行中改动需谨慎，建议停服后操作）。
-- 微信重启后服务会自动调用 `/api/v1/attach` 恢复；WebSocket 断线按 1/2/5/10/30 秒
-  退避重连；API 重启后的游标重置会被检测并记日志（关键字 `API_CURSOR_RESET`）。
+- OCR 监听由使用端自行启动和维护，本服务不调用 `/api/v1/listener/start`
+  和 `/api/v1/attach`；WebSocket 断线（含微信离线、监听未开）按 1/2/5/10/30 秒
+  退避重连，API 重启后的游标重置会被检测并记日志（关键字 `API_CURSOR_RESET`）。

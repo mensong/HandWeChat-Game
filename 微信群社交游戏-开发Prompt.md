@@ -276,7 +276,7 @@ API 只返回当前聊天标题，没有稳定的群 ID。为支持多群并防�
 1. 服务启动后读取配置、初始化数据库。
 2. 调用 `/api/v1/health`：
    - 若微信不在线（`online=false`），记录错误并每 10 秒重试。
-   - 若 `listener_running=false`，调用 `/api/v1/listener/start`；失败则每 10 秒重试。
+   - `listener_running` 仅用于状态展示，OCR 监听的启动/重启由使用端负责，本服务不调用 `/api/v1/listener/start`。
 3. **丢弃积压消息。** 启动时用 `cursor=0&limit=100` 循环拉取直到 `has_more=false`，把本地 `cursor` 设为最后的 `next_cursor`，不处理这些历史消息。原因：避免服务重启后重放购买、送礼等扣费指令。
 4. 正常运行使用长轮询：`GET /api/v1/messages?cursor={local}&limit=100&timeout=25`。
 5. **API 重启检测：** 如果响应中的 `next_cursor` 小于本地 `cursor`，说明 API 进程重启、游标已重置。此时：
@@ -284,8 +284,8 @@ API 只返回当前聊天标题，没有稳定的群 ID。为支持多群并防�
    - 把本地 `cursor` 设为响应中的 `next_cursor`；
    - 丢弃本批消息（视为积压），继续轮询。
 6. API 错误处理：
-   - `WECHAT_OFFLINE` / `ATTACH_FAILED`：指数退避（1s、2s、5s、10s、30s 封顶），并尝试 `/api/v1/attach`。
-   - `OCR_CHANNEL_NOT_RUNNING`：调用 `/api/v1/listener/start`。
+   - `WECHAT_OFFLINE` / `ATTACH_FAILED`：指数退避（1s、2s、5s、10s、30s 封顶）重连，微信窗口的重新附加由使用端负责，本服务不调用 `/api/v1/attach`。
+   - `OCR_CHANNEL_NOT_RUNNING`：指数退避重连，等待使用端恢复监听，本服务不调用 `/api/v1/listener/start`。
    - HTTP 5xx / 连接失败：指数退避，不丢业务数据。
    - `INVALID_REQUEST`：记录请求参数，不重试。
 
