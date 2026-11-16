@@ -233,7 +233,9 @@ def test_gift_flow(env):
 
 def test_gift_failures(env):
     assert "不能送给自己" in env.send("张三", "送礼@张三 玫瑰")
-    assert "没有找到礼物" in env.send("张三", "送礼@李四 钻石")
+    # 空格被吞后未知礼物名无法切分，统一回复用法提示
+    assert "指令格式不对" in env.send("张三", "送礼@李四 钻石")
+    assert "数量必须在 1~99" in env.send("张三", "送礼@李四 玫瑰 100")
     assert "数量必须在 1~99" in env.send("张三", "送礼@李四 玫瑰 100")
     env.store.adjust_coins(env.group, "张三", -195, "test", None, env.clock.t.isoformat())
     assert "金币不足" in env.send("张三", "送礼@李四 玫瑰")
@@ -383,3 +385,53 @@ def test_charm_used_in_price(env):
     env.rng.set_sequence([1.0])
     reply = env.send("王五", "购买奴隶@李四")
     assert "购买成功，花费 1060 金币" in reply  # ceil(530*2*1)
+
+
+# ---------- OCR 空格吞字兼容 ----------
+
+def test_purchase_glued_chatter_prefix(env):
+    env.rng.set_sequence([1.0])
+    env.send("张三", "购买奴隶@李四")
+    env.rng.set_sequence([1.0])
+    reply = env.send("王五", "购买奴隶@李四谢谢")  # 粘连闲聊 → 前缀命中李四
+    assert "购买失败：李四 已经是 张三 的奴隶" in reply
+
+
+def test_release_glued_chatter_prefix(env):
+    env.rng.set_sequence([1.0, 2.0])
+    env.send("张三", "购买奴隶@李四")
+    reply = env.send("张三", "给他自由@李四哈哈")
+    assert "恭喜李四恢复自由身" in reply
+
+
+def test_gift_no_spaces(env):
+    reply = env.send("张三", "送礼@李四玫瑰2")
+    assert "张三 送给 李四 ×2 玫瑰，花费 20 金币" in reply
+    assert charm(env, "李四") == 12.0
+
+
+def test_gift_glued_chatter_prefix(env):
+    env.send("李四", "签到")
+    reply = env.send("张三", "送礼@李四谢谢玫瑰")
+    assert "张三 送给 李四 ×1 玫瑰，花费 10 金币" in reply
+
+
+def test_transfer_no_spaces(env):
+    env.send("李四", "签到")
+    reply = env.send("张三", "转账@李四100")
+    assert "转账成功：张三 → 李四 95 金币（手续费 5 金币）" in reply
+
+
+def test_transfer_missing_amount_hint(env):
+    reply = env.send("张三", "转账@李四")
+    assert "指令格式不对" in reply
+
+
+def test_gift_unknown_glued(env):
+    reply = env.send("张三", "送礼@李四钻石")
+    assert "指令格式不对" in reply
+
+
+def test_exact_command_with_random_spaces(env):
+    reply = env.send("张三", "签  到")
+    assert "签到成功" in reply

@@ -37,6 +37,10 @@ class FakeSender:
         return True
 
     @property
+    def size(self) -> int:
+        return 0
+
+    @property
     def last(self):
         return self.sent[-1] if self.sent else None
 

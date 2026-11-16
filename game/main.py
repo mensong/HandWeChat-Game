@@ -3,16 +3,13 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import json
 import logging
-import signal
 import sys
-import threading
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 from .config import Config, load_config
+from .console import build_console_server
 from .engine import Engine
 from .rng import Rng
 from .send_queue import SendQueue
@@ -38,30 +35,8 @@ def setup_logging(log_dir: Path) -> None:
     log.addHandler(console)
 
 
-def start_health_server(port: int, engine: Engine) -> ThreadingHTTPServer:
-    class Handler(BaseHTTPRequestHandler):
-        def do_GET(self):
-            if self.path == "/health":
-                body = json.dumps(engine.stats(), ensure_ascii=False).encode("utf-8")
-                self.send_response(200)
-                self.send_header("Content-Type", "application/json; charset=utf-8")
-                self.send_header("Content-Length", str(len(body)))
-                self.end_headers()
-                self.wfile.write(body)
-            else:
-                self.send_response(404)
-                self.end_headers()
-
-        def log_message(self, fmt, *args):
-            pass
-
-    server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
-    threading.Thread(target=server.serve_forever, daemon=True).start()
-    return server
-
-
-async def bootstrap(client: WechatClient, cfg: Config, engine: Engine) -> int:
-    """等待微信在线、启动监听、丢弃积压消息，返回起始游标。"""
+async def bootstrap(client: WechatClient, engine: Engine) -> None:
+    """等待微信在线并启动 OCR 监听；连接前已产生的消息不回补。"""
     while True:
         try:
             h = await client.health()
@@ -81,32 +56,32 @@ async def bootstrap(client: WechatClient, cfg: Config, engine: Engine) -> int:
             log.info("ocr listener started")
         except ApiError as e:
             log.error("listener start failed: %s", e)
-    cursor = 0
-    while True:
-        try:
-            batch = await client.messages(cursor, cfg.get("poll_limit"), 0)
-        except ApiError as e:
-            log.error("backlog drain failed: %s", e)
-            await asyncio.sleep(10)
-            continue
-        cursor = int(batch.get("next_cursor", cursor))
-        engine.set_cursor(cursor)
-        if not batch.get("has_more"):
-            break
-    log.info("startup: skipped %d backlog messages, cursor=%d", cursor, cursor)
-    return cursor
+    log.info("startup: backlog skipped, waiting for websocket messages")
 
 
-async def poll_loop(client: WechatClient, cfg: Config, engine: Engine, cursor: int) -> None:
+async def ws_loop(client: WechatClient, engine: Engine) -> None:
     backoff_idx = 0
     while True:
         try:
-            batch = await client.messages(cursor, cfg.get("poll_limit"),
-                                          cfg.get("poll_timeout_seconds"))
-            backoff_idx = 0
+            async for frame in client.stream_frames():
+                if frame.get("type") == "ready":
+                    backoff_idx = 0
+                    cursor = int(frame.get("cursor", 0))
+                    if cursor < engine.cursor:
+                        log.warning("API_CURSOR_RESET: %d -> %d", engine.cursor, cursor)
+                    engine.set_cursor(cursor)
+                    log.info("websocket ready: cursor=%d buffer_size=%s",
+                             cursor, frame.get("buffer_size"))
+                    continue
+                for item in frame.get("items", []):
+                    engine.handle_message(item)
+                engine.set_cursor(int(frame.get("next_cursor", engine.cursor)))
+            log.warning("websocket closed by server")
+            engine.add_event(kind="ws_closed")
         except ApiError as e:
-            engine.last_error = f"poll: {e.code}"
-            log.warning("poll error: %s", e)
+            engine.last_error = f"ws: {e.code}"
+            engine.add_event(kind="ws_error", message=str(e))
+            log.warning("websocket error: %s", e)
             if e.code in ("WECHAT_OFFLINE", "ATTACH_FAILED"):
                 try:
                     await client.attach()
@@ -117,28 +92,12 @@ async def poll_loop(client: WechatClient, cfg: Config, engine: Engine, cursor: i
                     await client.start_listener()
                 except ApiError as e2:
                     log.warning("listener start failed: %s", e2)
-            elif e.code in ("INVALID_REQUEST",):
-                log.error("poll rejected: %s", e)
-            await asyncio.sleep(BACKOFF_STEPS[backoff_idx])
-            backoff_idx = min(backoff_idx + 1, len(BACKOFF_STEPS) - 1)
-            continue
         except Exception as e:
-            engine.last_error = f"poll: {type(e).__name__}"
-            log.exception("poll unexpected error")
-            await asyncio.sleep(BACKOFF_STEPS[backoff_idx])
-            backoff_idx = min(backoff_idx + 1, len(BACKOFF_STEPS) - 1)
-            continue
-
-        next_cursor = int(batch.get("next_cursor", cursor))
-        if next_cursor < cursor:
-            log.warning("API_CURSOR_RESET: %d -> %d, discard batch", cursor, next_cursor)
-            engine.set_cursor(next_cursor)
-            cursor = next_cursor
-            continue
-        for item in batch.get("items", []):
-            engine.handle_message(item)
-        cursor = next_cursor
-        engine.set_cursor(cursor)
+            engine.last_error = "ws: unexpected"
+            engine.add_event(kind="ws_error", message=type(e).__name__)
+            log.exception("websocket unexpected error")
+        await asyncio.sleep(BACKOFF_STEPS[backoff_idx])
+        backoff_idx = min(backoff_idx + 1, len(BACKOFF_STEPS) - 1)
 
 
 async def health_loop(client: WechatClient, cfg: Config, engine: Engine) -> None:
@@ -154,23 +113,25 @@ async def health_loop(client: WechatClient, cfg: Config, engine: Engine) -> None
         await asyncio.sleep(cfg.get("health_poll_seconds"))
 
 
-async def async_main(cfg: Config, db_path: str) -> None:
+async def async_main(cfg: Config, db_path: str, cfg_path: str) -> None:
     store = Store(db_path)
     clock = make_clock(cfg.get("timezone"))
     rng = Rng()
     client = WechatClient(cfg.get("api_base_url"), cfg.get("api_timeout_seconds"))
-    queue = SendQueue(client, cfg, log)
     engine = Engine(cfg, store, clock, rng, log)
+    queue = SendQueue(client, cfg, log, event_sink=engine.add_event)
     engine.attach_sender(queue)
     log.info("game service starting, db=%s api=%s", db_path, cfg.get("api_base_url"))
 
-    server = start_health_server(cfg.get("health_port"), engine)
-    cursor = await bootstrap(client, cfg, engine)
+    server = build_console_server(engine, cfg, cfg_path)
+    log.info("console listening on http://%s:%d/", cfg.get("web_host"),
+             cfg.get("health_port"))
+    await bootstrap(client, engine)
 
     tasks = [
         asyncio.create_task(queue.run(), name="send-worker"),
         asyncio.create_task(health_loop(client, cfg, engine), name="health-loop"),
-        asyncio.create_task(poll_loop(client, cfg, engine, cursor), name="poll-loop"),
+        asyncio.create_task(ws_loop(client, engine), name="ws-loop"),
     ]
     try:
         await asyncio.gather(*tasks)
@@ -199,7 +160,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     try:
-        asyncio.run(async_main(cfg, args.db))
+        asyncio.run(async_main(cfg, args.db, args.config))
     except KeyboardInterrupt:
         log.info("interrupted, exiting")
     return 0

@@ -1,8 +1,6 @@
 {
-  "api_base_url": "http://127.0.0.1:8000",
+  "api_base_url": "http://192.168.228.128:8000",
   "api_timeout_seconds": 30,
-  "poll_timeout_seconds": 25,
-  "poll_limit": 100,
   "health_poll_seconds": 2,
   "timezone": "Asia/Shanghai",
   "allow_hash_prefix": true,

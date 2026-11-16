@@ -35,12 +35,18 @@ def split_reply(text: str, max_chars: int) -> list[str]:
 
 
 class SendQueue:
-    def __init__(self, client: WechatClient, cfg, log: logging.Logger):
+    def __init__(self, client: WechatClient, cfg, log: logging.Logger,
+                 event_sink=None):
         self.client = client
         self.cfg = cfg
         self.log = log
+        self.event_sink = event_sink
         self.q: asyncio.Queue = asyncio.Queue(maxsize=cfg.get("send_queue_max"))
         self._sent_times: deque[float] = deque()
+
+    def _event(self, kind: str, **fields) -> None:
+        if self.event_sink is not None:
+            self.event_sink(kind=kind, **fields)
 
     def enqueue(self, text: str) -> bool:
         try:
@@ -48,6 +54,7 @@ class SendQueue:
             return True
         except asyncio.QueueFull:
             self.log.warning("SEND_QUEUE_FULL, drop reply (%d chars)", len(text))
+            self._event("send_queue_full", text_len=len(text))
             return False
 
     @property
@@ -118,11 +125,14 @@ class SendQueue:
                     error_code = task.get("error_code")
                     self.log.error("send task failed: task_id=%s code=%s msg=%s",
                                    task_id, error_code, task.get("error_message"))
+                    self._event("send_failed", task_id=task_id, error_code=error_code,
+                                error_message=task.get("error_message"))
                     if error_code == "SEND_FAILED" and not retried:
                         await asyncio.sleep(5)
                         await self._send_one(text, retried=True)
                     return
             if loop.time() > deadline:
                 self.log.error("send task timeout: task_id=%s", task_id)
+                self._event("send_timeout", task_id=task_id)
                 return
             await asyncio.sleep(1)

@@ -49,9 +49,7 @@ def purchase(ctx, group: str, sender: str, target_name: str) -> str:
 def release(ctx, group: str, sender: str, target_name: str) -> str:
     now = ctx.now()
     ts = fmt_iso(now)
-    target = ctx.store.get_player(group, target_name)
-    if target is None:
-        target = ctx.store.find_player_ci(group, target_name)
+    target = ctx.store.resolve_player(group, target_name)
     if target is None or target.master != sender:
         return f"{sender} 的奴隶列表中没有 {target_name}。"
     charm, _anchor = effective_charm(ctx, group, target, now)

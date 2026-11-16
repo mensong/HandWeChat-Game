@@ -7,8 +7,6 @@ from pathlib import Path
 DEFAULTS = {
     "api_base_url": "http://127.0.0.1:8000",
     "api_timeout_seconds": 30,
-    "poll_timeout_seconds": 25,
-    "poll_limit": 100,
     "health_poll_seconds": 2,
     "timezone": "Asia/Shanghai",
 
@@ -66,13 +64,14 @@ DEFAULTS = {
     "gift_rank_days": 30,
 
     "health_port": 8001,
+    "web_host": "0.0.0.0",
 
     "gifts": [],
     "work_events": [],
 }
 
 _INT_KEYS = [
-    "poll_limit", "reply_max_chars", "send_queue_max", "send_task_timeout_seconds",
+    "reply_max_chars", "send_queue_max", "send_task_timeout_seconds",
     "initial_coins", "min_slave_price", "max_slaves",
     "slave_work_max_per_day", "rebel_max_per_day", "rebel_loot_max",
     "rebel_ransom_max", "rebel_compensation_max",
@@ -193,6 +192,23 @@ def models_WorkEvent(e: dict):
     from .models import WorkEvent
     return WorkEvent(text=e["text"], coins_min=int(e["coins_min"]),
                      coins_max=int(e["coins_max"]), weight=e["weight"])
+
+
+def read_config_file(path: str | Path) -> tuple[str, dict]:
+    p = Path(path)
+    if not p.exists():
+        raise FileNotFoundError(f"config file not found: {p}")
+    data = json.loads(p.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise ValueError("config root must be a JSON object")
+    return str(p.resolve()), data
+
+
+def write_config_file(path: str | Path, data: dict) -> None:
+    Config(data)  # 先校验，非法配置直接抛错，不落盘
+    p = Path(path)
+    p.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n",
+                 encoding="utf-8", newline="")
 
 
 def load_config(path: str | Path) -> Config:

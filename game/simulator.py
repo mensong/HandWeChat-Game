@@ -17,7 +17,8 @@ from datetime import timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from .config import Config, ConfigError, load_config
+from .config import (Config, ConfigError, load_config, read_config_file,
+                     write_config_file)
 from .engine import Engine
 from .rng import Rng
 from .store import Store
@@ -324,8 +325,6 @@ const META = [
   {group: "服务与接口", items: [
     ["api_base_url", "HandWeChat API 地址", "text", ""],
     ["api_timeout_seconds", "API 超时（秒）", "num", ""],
-    ["poll_timeout_seconds", "长轮询等待（秒，0~30）", "num", ""],
-    ["poll_limit", "单次拉取消息上限（1~100）", "num", ""],
     ["health_poll_seconds", "健康检查间隔（秒）", "num", ""],
     ["health_port", "本服务健康检查端口", "num", ""],
     ["timezone", "时区", "text", "本机缺时区数据时按 UTC+8 处理"],
@@ -530,23 +529,6 @@ load();
 </body>
 </html>
 """
-
-
-def read_config_file(path: str) -> tuple[str, dict]:
-    p = Path(path)
-    if not p.exists():
-        raise FileNotFoundError(f"config file not found: {p}")
-    data = json.loads(p.read_text(encoding="utf-8"))
-    if not isinstance(data, dict):
-        raise ValueError("config root must be a JSON object")
-    return str(p.resolve()), data
-
-
-def write_config_file(path: str, data: dict) -> None:
-    Config(data)  # 先校验，非法配置直接抛错，不落盘
-    p = Path(path)
-    p.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n",
-                 encoding="utf-8", newline="")
 
 
 class ReplyCollector:

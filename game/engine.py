@@ -65,6 +65,8 @@ class Engine:
         self.last_error: str | None = None
         self.api_online: bool | None = None
         self.listener_running: bool | None = None
+        self.recent_events: deque = deque(maxlen=500)
+        self.last_api_health: dict | None = None
 
     def attach_sender(self, sender) -> None:
         self._sender = sender
@@ -74,6 +76,7 @@ class Engine:
 
     def handle_health(self, health: dict) -> None:
         now = self.clock()
+        self.last_api_health = dict(health)
         self.api_online = bool(health.get("online"))
         self.listener_running = bool(health.get("listener_running"))
         key = self.tracker.update(health.get("chat_title"), now)
@@ -107,7 +110,7 @@ class Engine:
         if self._content_dupe(group, sender, text, now):
             self.log.info("dup content: group=%s sender=%s", group, sender)
             return
-        cmd = parse(text)
+        cmd = parse(text, self.cfg)
         started = time.monotonic()
         if cmd is None:
             hint = usage_hint(text)
@@ -133,12 +136,15 @@ class Engine:
         except Exception:
             self.log.exception("handler error: cmd=%s sender=%s", cmd.name, sender)
             self.last_error = f"handler error: {cmd.name}"
+            self.add_event(kind="error", group=group, sender=sender,
+                           cmd=cmd.name, message="handler error")
             self._maybe_send(group, sender, "系统开小差了，请稍后再试。",
                              self._last_error, self.cfg.get("usage_hint_cooldown_seconds"), now)
             return
         self._last_cmd[(group, sender)] = now.timestamp()
         self.processed_total += 1
-        self._log_command(group, sender, cmd.name, "ok", started)
+        detail = (reply or "").split("\n", 1)[0][:120]
+        self._log_command(group, sender, cmd.name, "ok", started, detail)
         if reply and self._sender is not None:
             self._sender.enqueue(reply)
 
@@ -175,11 +181,22 @@ class Engine:
         if self._sender is not None:
             self._sender.enqueue(text)
 
+    def add_event(self, kind: str, **fields) -> None:
+        entry = {"ts": fmt_iso(self.clock()), "kind": kind}
+        entry.update(fields)
+        self.recent_events.append(entry)
+
+    def get_recent_events(self, limit: int = 200) -> list[dict]:
+        events = list(self.recent_events)
+        return events[-limit:] if limit > 0 else events
+
     def _log_command(self, group: str, sender: str, cmd: str, result: str,
-                     started: float) -> None:
+                     started: float, detail: str = "") -> None:
         cost_ms = int((time.monotonic() - started) * 1000)
         self.log.info("group=%s sender=%s cmd=%s result=%s cost_ms=%d",
                       group, sender, cmd, result, cost_ms)
+        self.add_event(kind="command", group=group, sender=sender, cmd=cmd,
+                       result=result, cost_ms=cost_ms, detail=detail)
 
     def stats(self) -> dict:
         return {

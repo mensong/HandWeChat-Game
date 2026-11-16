@@ -145,15 +145,35 @@ class Store:
             ).fetchone()
         return self._player(row)
 
+    def resolve_player(self, group: str, name: str) -> Optional[Player]:
+        """精确 → 忽略大小写 → 已知玩家最长前缀。
+
+        前缀解析用于 OCR 吞空格后昵称粘连闲聊的情况
+        （如 "张三谢谢" 命中已有玩家 "张三"）。
+        """
+        p = self.get_player(group, name)
+        if p is not None:
+            return p
+        p = self.find_player_ci(group, name)
+        if p is not None:
+            return p
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT name FROM players WHERE group_key=?", (group,)
+            ).fetchall()
+        low = name.lower()
+        candidates = [r["name"] for r in rows if low.startswith(r["name"].lower())]
+        if candidates:
+            return self.get_player(group, max(candidates, key=len))
+        return None
+
     def get_or_create_target(self, group: str, name: str, now_iso: str,
                              initial_coins: int, charm_base: float,
                              auto_create: bool) -> Optional[Player]:
-        p = self.get_player(group, name)
-        if p is None:
-            p = self.find_player_ci(group, name)
+        p = self.resolve_player(group, name)
         if p is not None:
             return p
-        if not auto_create:
+        if not auto_create or not 1 <= len(name) <= 20:
             return None
         with self._lock:
             self._conn.execute(
@@ -195,6 +215,48 @@ class Store:
                 (group,),
             ).fetchall()
         return [dict(r) for r in rows]
+
+    def list_groups(self) -> list[str]:
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT DISTINCT group_key FROM players ORDER BY group_key"
+            ).fetchall()
+        return [r["group_key"] for r in rows]
+
+    def admin_add_coins(self, group: str, name: str, amount: int,
+                        ts_iso: str) -> int:
+        return self.adjust_coins(group, name, amount, "admin", None, ts_iso)
+
+    def admin_set_charm(self, group: str, name: str, value: float) -> None:
+        value = float(value)
+        if value < 0:
+            raise ValueError("charm must be >= 0")
+        with self._lock:
+            cur = self._conn.execute(
+                "UPDATE players SET charm=? WHERE group_key=? AND name=?",
+                (value, group, name),
+            )
+            if cur.rowcount == 0:
+                raise LookupError(f"player not found: {name}")
+
+    def admin_clear_master(self, group: str, name: str) -> None:
+        with self._lock:
+            cur = self._conn.execute(
+                "UPDATE players SET master=NULL, enslaved_at=NULL WHERE group_key=? AND name=?",
+                (group, name),
+            )
+            if cur.rowcount == 0:
+                raise LookupError(f"player not found: {name}")
+
+    def admin_get_player(self, group: str, name: str) -> dict:
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT name, coins, charm, master FROM players WHERE group_key=? AND name=?",
+                (group, name),
+            ).fetchone()
+        if row is None:
+            raise LookupError(f"player not found: {name}")
+        return dict(row)
 
     def slaves(self, group: str, master: str) -> list[Player]:
         with self._lock:
