@@ -44,6 +44,12 @@ class Dispatcher:
             return slaves.work(ctx, group, sender)
         if cmd.name == "my_slaves":
             return slaves.my_slaves(ctx, group, sender)
+        if cmd.name == "train_slave":
+            return slaves.train(ctx, group, sender, cmd.target)
+        if cmd.name == "train_all_slaves":
+            return slaves.train_all(ctx, group, sender)
+        if cmd.name == "ransom_slave":
+            return slaves.ransom(ctx, group, sender, cmd.target)
         if cmd.name == "rebel":
             return slaves.rebel(ctx, group, sender)
         if cmd.name == "slaves_help":

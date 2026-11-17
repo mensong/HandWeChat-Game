@@ -104,14 +104,13 @@ def test_ws_messages_url():
 
 def test_stream_frames():
     async def handler(ws):
-        await ws.send(json.dumps({"type": "ready", "cursor": 42, "buffer_size": 3},
-                                 ensure_ascii=False))
+        await ws.send(json.dumps({"type": "ready", "buffer_size": 3}, ensure_ascii=False))
         await ws.send(json.dumps({"type": "ping", "ts": "2026-11-13T12:01:02+08:00"}))
         await ws.send(json.dumps({
             "type": "messages",
             "items": [{"id": "43", "cursor": 43, "sender": "张三", "content": "收到",
                        "received_at": "2026-11-13T12:01:02+08:00"}],
-            "next_cursor": 43, "has_more": False}, ensure_ascii=False))
+            "has_more": False}, ensure_ascii=False))
         await ws.send(json.dumps({"type": "error", "code": "INTERNAL_ERROR",
                                   "message": "服务内部错误"}, ensure_ascii=False))
 
@@ -126,7 +125,7 @@ def test_stream_frames():
             assert err.value.code == "INTERNAL_ERROR"
             assert err.value.message == "服务内部错误"
         assert [f["type"] for f in frames] == ["ready", "messages"]
-        assert frames[0]["cursor"] == 42
+        assert frames[0]["buffer_size"] == 3
         assert frames[1]["items"][0]["content"] == "收到"
 
     asyncio.run(run())
@@ -134,8 +133,7 @@ def test_stream_frames():
 
 def test_stream_ends_on_server_close():
     async def handler(ws):
-        await ws.send(json.dumps({"type": "ready", "cursor": 7, "buffer_size": 0},
-                                 ensure_ascii=False))
+        await ws.send(json.dumps({"type": "ready", "buffer_size": 0}, ensure_ascii=False))
 
     async def run():
         async with serve(handler, "127.0.0.1", 0) as server:

@@ -27,6 +27,7 @@ def test_exact_commands(cfg):
         ("奴隶打工", "slave_work"),
         ("我的奴隶", "my_slaves"),
         ("我要自由", "rebel"),
+        ("调教所有奴隶", "train_all_slaves"),
         ("奴隶系统", "slaves_help"),
         # OCR 插入空格也能命中
         ("签 到", "sign_in"),
@@ -57,6 +58,23 @@ def test_release_variants(cfg):
     assert p(cfg, "给他自由@李四").name == "release_slave"
     assert p(cfg, "给她自由@李四。").name == "release_slave"
     assert p(cfg, "给她自由@李四").target == "李四"
+
+
+def test_train_variants(cfg):
+    cmd = p(cfg, "调教@李四")
+    assert (cmd.name, cmd.target) == ("train_slave", "李四")
+    cmd = p(cfg, "调教 ＠ 李 四。")
+    assert cmd.target == "李四"
+    cmd = p(cfg, "调教所有奴隶")
+    assert (cmd.name, cmd.target) == ("train_all_slaves", None)
+    assert p(cfg, "调教所有奴 隶").name == "train_all_slaves"
+
+
+def test_ransom_variants(cfg):
+    cmd = p(cfg, "赎身@李四")
+    assert (cmd.name, cmd.target) == ("ransom_slave", "李四")
+    cmd = p(cfg, "赎身 ＠ 李 四。")
+    assert cmd.target == "李四"
 
 
 def test_transfer_parse(cfg):
@@ -130,6 +148,10 @@ def test_usage_hints():
     assert usage_hint(n("转账@张三")) is not None
     assert usage_hint(n("送礼@张三")) is not None
     assert usage_hint(n("给他自由 李四")) is not None
+    assert usage_hint(n("调教")) is not None
+    assert usage_hint(n("调教 李四")) is not None
+    assert usage_hint(n("赎身")) is not None
+    assert usage_hint(n("赎身 李四")) is not None
 
 
 def test_invalid_target_rejected(cfg):

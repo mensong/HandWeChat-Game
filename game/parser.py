@@ -33,6 +33,7 @@ EXACT_COMMANDS = {
     "奴隶打工": "slave_work",
     "我的奴隶": "my_slaves",
     "我要自由": "rebel",
+    "调教所有奴隶": "train_all_slaves",
     "奴隶系统": "slaves_help",
 }
 
@@ -43,6 +44,8 @@ _PARAM_PATTERNS = [
     ("send_gift", re.compile(r"^送礼@(.+)$")),
     ("purchase_slave", re.compile(r"^购买奴隶@(.+)$")),
     ("release_slave", re.compile(r"^给(?:他|她)自由@(.+)$")),
+    ("train_slave", re.compile(r"^调教@(.+)$")),
+    ("ransom_slave", re.compile(r"^赎身@(.+)$")),
 ]
 
 USAGE_KEYWORDS = [
@@ -51,6 +54,8 @@ USAGE_KEYWORDS = [
     ("购买奴隶", "购买奴隶@用户名"),
     ("给他自由", "给他自由@用户名"),
     ("给她自由", "给他自由@用户名"),
+    ("调教", "调教@奴隶名"),
+    ("赎身", "赎身@用户名"),
 ]
 
 USAGE_HINT_TEMPLATE = "指令格式不对。用法：{usage}"

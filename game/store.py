@@ -11,8 +11,8 @@ from .models import Player
 
 _PLAYER_COLS = ("group_key, name, coins, charm, charm_anchor, master, enslaved_at, "
                 "is_phantom, created_at, last_seen_at, last_signin_date, signin_streak, "
-                "last_work_at, last_rebel_at, total_charm_gained, total_gift_spent, "
-                "total_gift_charm")
+                "last_work_at, last_rebel_at, last_interact_at, last_ransom_at, "
+                "total_charm_gained, total_gift_spent, total_gift_charm")
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS players (
@@ -30,6 +30,8 @@ CREATE TABLE IF NOT EXISTS players (
   signin_streak    INTEGER NOT NULL DEFAULT 0,
   last_work_at     TEXT,
   last_rebel_at    TEXT,
+  last_interact_at TEXT,
+  last_ransom_at   TEXT,
   total_charm_gained REAL  NOT NULL DEFAULT 0,
   total_gift_spent   INTEGER NOT NULL DEFAULT 0,
   total_gift_charm   REAL  NOT NULL DEFAULT 0,
@@ -89,6 +91,11 @@ class Store:
             self._conn.execute("PRAGMA journal_mode=WAL")
             self._conn.execute("PRAGMA foreign_keys=ON")
             self._conn.executescript(_SCHEMA)
+            cols = {r["name"] for r in self._conn.execute("PRAGMA table_info(players)")}
+            if "last_interact_at" not in cols:
+                self._conn.execute("ALTER TABLE players ADD COLUMN last_interact_at TEXT")
+            if "last_ransom_at" not in cols:
+                self._conn.execute("ALTER TABLE players ADD COLUMN last_ransom_at TEXT")
 
     def close(self) -> None:
         with self._lock:
@@ -362,7 +369,8 @@ class Store:
         return row["count"], row["amount"]
 
     def set_player_field(self, group: str, name: str, field: str, value) -> None:
-        if field not in ("last_signin_date", "signin_streak", "last_work_at", "last_rebel_at"):
+        if field not in ("last_signin_date", "signin_streak", "last_work_at",
+                         "last_rebel_at", "last_interact_at", "last_ransom_at"):
             raise ValueError(f"field not writable: {field}")
         with self._lock:
             self._conn.execute(

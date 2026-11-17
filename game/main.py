@@ -61,16 +61,17 @@ async def ws_loop(client: WechatClient, engine: Engine) -> None:
             async for frame in client.stream_frames():
                 if frame.get("type") == "ready":
                     backoff_idx = 0
-                    cursor = int(frame.get("cursor", 0))
-                    if cursor < engine.cursor:
-                        log.warning("API_CURSOR_RESET: %d -> %d", engine.cursor, cursor)
-                    engine.set_cursor(cursor)
-                    log.info("websocket ready: cursor=%d buffer_size=%s",
-                             cursor, frame.get("buffer_size"))
+                    log.info("websocket ready: buffer_size=%s", frame.get("buffer_size"))
                     continue
-                for item in frame.get("items", []):
+                items = frame.get("items", [])
+                # 每批只认 is_latest 的那条；整帧没有该字段说明 API 尚未升级，整帧丢弃。
+                latest = [it for it in items if it.get("is_latest") is True]
+                if items and not latest:
+                    log.warning("frame dropped, no is_latest flag: %d items", len(items))
+                for item in latest:
                     engine.handle_message(item)
-                engine.set_cursor(int(frame.get("next_cursor", engine.cursor)))
+                if items and items[-1].get("cursor") is not None:
+                    engine.set_cursor(int(items[-1]["cursor"]))
             log.warning("websocket closed by server")
             engine.add_event(kind="ws_closed")
         except ApiError as e:

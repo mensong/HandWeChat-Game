@@ -52,8 +52,11 @@ def cfg():
     from game.config import Config, DEFAULTS, load_config
     data = load_config(REPO / "config" / "game_config.json").as_dict()
     data.update({k: v for k, v in DEFAULTS.items()
-                 if k not in ("gifts", "work_events",
+                 if k not in ("gifts", "work_events", "slave_interactions",
                               "bot_name", "bot_name_aliases", "pat_reply_texts")})
+    # 拍一拍用例使用固定昵称，避免随生产配置里的 bot_name 漂移
+    data["bot_name"] = "童声微蔓"
+    data["bot_name_aliases"] = ["童声徽蔓"]
     return Config(data)
 
 

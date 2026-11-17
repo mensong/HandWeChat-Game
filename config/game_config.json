@@ -11,16 +11,14 @@
     ""
   ],
   "dedupe_window_seconds": 5,
-  "command_rate_limit_seconds": 2,
+  "command_rate_limit_seconds": 0,
   "help_cooldown_seconds": 60,
   "usage_hint_cooldown_seconds": 60,
   "reply_max_chars": 500,
   "bot_name": "饭人休闲传",
   "bot_name_aliases": [],
   "pat_reply_texts": [
-    "{pat} 拍了拍我\n我也拍了拍 {pat}～",
-    "别拍啦 {pat}\n再拍要收费了！",
-    "{pat} 拍了拍我{what}\n我记住你了！"
+    "{pat} 拍了拍我，我醒啦～\n这里是本群游戏玩法总览：\n\n【金币】我的金币 / 签到 / 转账@用户名 数量 / 金币榜\n【魅力】我的魅力 / 魅力榜\n【礼物】礼物列表 / 送礼@用户名 礼物名 [数量] / 礼物榜\n【奴隶】购买奴隶@用户名 / 给他自由@用户名 / 奴隶打工 / 我的奴隶 / 我要自由\n\n签到每天领金币，送礼能加魅力。发送「金币系统」「魅力系统」「礼物系统」「奴隶系统」可看各系统详情。"
   ],
   "pat_reply_cooldown_seconds": 10,
   "send_max_per_minute": 15,
@@ -29,9 +27,9 @@
   "send_task_timeout_seconds": 30,
   "allowed_groups": [],
   "group_title_stable_seconds": 10,
-  "initial_coins": 200,
+  "initial_coins": 1000,
   "auto_create_target": true,
-  "charm_base": 10,
+  "charm_base": 1000,
   "charm_decay_period_days": 7,
   "charm_decay_rate": 0.1,
   "max_slaves": 30,
@@ -59,9 +57,21 @@
   "rebel_loot_max": 500,
   "rebel_ransom_max": 500,
   "rebel_compensation_max": 200,
-  "signin_base_reward": 10,
-  "signin_streak_step": 2,
-  "signin_max_reward": 24,
+  "interaction_coins_min": 1,
+  "interaction_coins_max": 50,
+  "interaction_charm_min": 1,
+  "interaction_charm_max": 50,
+  "interaction_weight_coins": 4,
+  "interaction_weight_charm": 4,
+  "interaction_weight_both": 2,
+  "interaction_cooldown_minutes": 10,
+  "interaction_max_per_day": 10,
+  "ransom_price_coeff": 1.0,
+  "ransom_cooldown_minutes": 10,
+  "ransom_max_per_day": 10,
+  "signin_base_reward": 100,
+  "signin_streak_step": 20,
+  "signin_max_reward": 200,
   "transfer_tax_rate": 0.05,
   "transfer_daily_limit": 5000,
   "gift_max_quantity": 99,
@@ -263,6 +273,32 @@
       "coins_min": 0,
       "coins_max": 0,
       "weight": 2.5
+    }
+  ],
+  "slave_interactions": [
+    {
+      "text": "{sender} 抡起沙包甘大的拳头，上去就给 {奴隶} 一拳。",
+      "tone": "贬"
+    },
+    {
+      "text": "{sender} 揉了揉 {奴隶} 的脑袋，夸了一句「今天也很乖」。",
+      "tone": "褒"
+    },
+    {
+      "text": "{sender} 把 {奴隶} 刚领的零花钱抽走了一半，还哼了一声。",
+      "tone": "贬"
+    },
+    {
+      "text": "{sender} 偷偷给 {奴隶} 塞了一颗糖，装作什么都没发生。",
+      "tone": "褒"
+    },
+    {
+      "text": "{sender} 盯着 {奴隶} 看了半天，最后什么也没说。",
+      "tone": "中性"
+    },
+    {
+      "text": "{sender} 和 {奴隶} 蹲在墙角分了一包薯片。",
+      "tone": "中性"
     }
   ],
   "web_host": ""

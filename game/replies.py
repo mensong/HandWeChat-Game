@@ -8,6 +8,31 @@ from .util import fmt_charm
 ERROR_REPLY = "系统开小差了，请稍后再试。"
 NOT_FOUND_REPLY = "未找到玩家「{target}」，请确认昵称是否正确。"
 
+_TONE_EXPECT = {"褒": 1, "贬": -1}
+
+
+def fmt_delta(value) -> str:
+    if float(value).is_integer():
+        return f"{int(value):+d}"
+    return f"{round(float(value), 1):+.1f}"
+
+
+def interaction_effect(slave: str, tone: str, changes) -> str:
+    """changes 为 [(字段, 变化值)]，字段取 coins/charm；语气相反时加“但…却”。"""
+    expect = _TONE_EXPECT.get(tone)
+    parts = []
+    for field, delta in changes:
+        if not delta:
+            continue
+        label = "金币" if field == "coins" else "魅力"
+        if expect is not None and delta * expect < 0:
+            parts.append(f"但 {slave} 的{label}却{fmt_delta(delta)}")
+        else:
+            parts.append(f"{slave} 的{label}{fmt_delta(delta)}")
+    if not parts:
+        return f"{slave} 这次没有任何变化。"
+    return "，".join(parts)
+
 
 def pat_reply(template: str, pat: str, patted: str, what: str) -> str:
     return (template.replace("{pat}", pat)
@@ -129,6 +154,14 @@ def slave_list(sender: str, slaves: Sequence[str], max_slaves: int,
     return "\n".join(lines)
 
 
+def ransom_ok(sender: str, target: str, price: int, master: str) -> str:
+    if price:
+        return (f"{sender} 为 {target} 赎身，支付 {price} 金币。\n"
+                f"{target} 已恢复自由身，{master} 获得 {price} 金币。")
+    return (f"{sender} 为 {target} 赎身，没有花费金币。\n"
+            f"{target} 已恢复自由身（原主人 {master}）。")
+
+
 def work_report(sender: str, lines: Sequence[str], total: int, coins: int) -> str:
     body = [f"{sender}的奴隶打工："] + list(lines)
     body.append(work_total_line(total, coins))
@@ -158,4 +191,7 @@ def slaves_help() -> str:
             "3. 奴隶打工 —— 让所有奴隶打工\n"
             "4. 我的奴隶 —— 查看我的奴隶\n"
             "5. 我要自由 —— 反抗奴隶主\n"
+            "6. 调教@奴隶名 —— 与自己的奴隶互动\n"
+            "7. 调教所有奴隶 —— 调教全部奴隶\n"
+            "8. 赎身@奴隶名 —— 为别人的奴隶赎身\n"
             "说明：购买价格 = 目标魅力值 × 系数 × 随机系数；每个主人最多 5 个奴隶。")

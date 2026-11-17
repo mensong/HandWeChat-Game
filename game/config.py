@@ -59,6 +59,21 @@ DEFAULTS = {
     "rebel_ransom_max": 500,
     "rebel_compensation_max": 200,
 
+    "slave_interactions": [],
+    "interaction_coins_min": 1,
+    "interaction_coins_max": 5,
+    "interaction_charm_min": 1,
+    "interaction_charm_max": 5,
+    "interaction_weight_coins": 4,
+    "interaction_weight_charm": 4,
+    "interaction_weight_both": 2,
+    "interaction_cooldown_minutes": 10,
+    "interaction_max_per_day": 10,
+
+    "ransom_price_coeff": 1.0,
+    "ransom_cooldown_minutes": 10,
+    "ransom_max_per_day": 10,
+
     "signin_base_reward": 10,
     "signin_streak_step": 2,
     "signin_max_reward": 24,
@@ -84,11 +99,17 @@ _INT_KEYS = [
     "signin_base_reward", "signin_streak_step", "signin_max_reward",
     "transfer_daily_limit", "gift_max_quantity", "gift_daily_spend_limit",
     "gift_rank_days", "health_port", "pat_reply_cooldown_seconds",
+    "interaction_coins_min", "interaction_coins_max",
+    "interaction_charm_min", "interaction_charm_max",
+    "interaction_cooldown_minutes", "interaction_max_per_day",
+    "ransom_cooldown_minutes", "ransom_max_per_day",
 ]
 _FLOAT_KEYS = [
     "charm_base", "charm_decay_rate", "slave_price_coeff", "slave_price_random_min",
     "slave_price_random_max", "release_reward_coeff", "transfer_tax_rate",
     "rebel_master_coeff", "rebel_slave_coeff",
+    "interaction_weight_coins", "interaction_weight_charm", "interaction_weight_both",
+    "ransom_price_coeff",
 ]
 _POSITIVE_FLOAT_KEYS = [
     "slave_price_coeff", "release_reward_coeff", "rebel_master_coeff", "rebel_slave_coeff",
@@ -97,6 +118,9 @@ _POSITIVE_FLOAT_KEYS = [
 
 class ConfigError(Exception):
     pass
+
+
+INTERACTION_TONES = ("褒", "贬", "中性")
 
 
 class Config:
@@ -108,6 +132,7 @@ class Config:
         self._validate()
         self.gifts = [self._make_gift(g) for g in merged["gifts"]]
         self.work_events = [self._make_event(e) for e in merged["work_events"]]
+        self.interactions = [models_Interaction(i) for i in merged["slave_interactions"]]
         self.gifts.sort(key=lambda g: g.price)
 
     def get(self, key: str):
@@ -186,6 +211,35 @@ class Config:
                 raise ConfigError(f"{k} must be a non-empty list")
             if any(not isinstance(x, (int, float)) or x < 0 for x in d[k]):
                 raise ConfigError(f"{k} entries must be non-negative numbers")
+        if d["interaction_coins_min"] < 1 or d["interaction_coins_max"] < d["interaction_coins_min"]:
+            raise ConfigError("interaction_coins range invalid")
+        if d["interaction_charm_min"] < 1 or d["interaction_charm_max"] < d["interaction_charm_min"]:
+            raise ConfigError("interaction_charm range invalid")
+        if min(d["interaction_weight_coins"], d["interaction_weight_charm"],
+               d["interaction_weight_both"]) < 0:
+            raise ConfigError("interaction weights must be >= 0")
+        if d["interaction_weight_coins"] + d["interaction_weight_charm"] + d["interaction_weight_both"] <= 0:
+            raise ConfigError("interaction weights sum must be > 0")
+        if d["interaction_cooldown_minutes"] < 0:
+            raise ConfigError("interaction_cooldown_minutes must be >= 0")
+        if d["interaction_max_per_day"] < 1:
+            raise ConfigError("interaction_max_per_day must be >= 1")
+        if not isinstance(d["slave_interactions"], list):
+            raise ConfigError("slave_interactions must be a list")
+        for item in d["slave_interactions"]:
+            if not isinstance(item, dict):
+                raise ConfigError("slave_interactions entries must be objects")
+            text = item.get("text")
+            if not isinstance(text, str) or not text.strip():
+                raise ConfigError("slave_interactions text must be a non-empty string")
+            if item.get("tone") not in INTERACTION_TONES:
+                raise ConfigError(f"slave_interactions tone must be one of {INTERACTION_TONES}")
+        if not 0 <= d["ransom_price_coeff"] <= 1:
+            raise ConfigError("ransom_price_coeff must be in [0, 1]")
+        if d["ransom_cooldown_minutes"] < 0:
+            raise ConfigError("ransom_cooldown_minutes must be >= 0")
+        if d["ransom_max_per_day"] < 1:
+            raise ConfigError("ransom_max_per_day must be >= 1")
 
     def find_gift(self, token: str):
         t = token.lower()
@@ -213,6 +267,11 @@ def models_WorkEvent(e: dict):
     from .models import WorkEvent
     return WorkEvent(text=e["text"], coins_min=int(e["coins_min"]),
                      coins_max=int(e["coins_max"]), weight=e["weight"])
+
+
+def models_Interaction(i: dict):
+    from .models import Interaction
+    return Interaction(text=i["text"], tone=i["tone"])
 
 
 def read_config_file(path: str | Path) -> tuple[str, dict]:

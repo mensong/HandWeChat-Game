@@ -211,6 +211,18 @@ const META = [
     ["rebel_loot_max", "抢走上限", "num", ""],
     ["rebel_ransom_max", "赎金/上缴上限", "num", ""],
     ["rebel_compensation_max", "补贴上限", "num", ""],
+    ["interaction_coins_min", "调教金币变化下限（绝对值）", "num", ""],
+    ["interaction_coins_max", "调教金币变化上限（绝对值）", "num", ""],
+    ["interaction_charm_min", "调教魅力变化下限（绝对值）", "num", ""],
+    ["interaction_charm_max", "调教魅力变化上限（绝对值）", "num", ""],
+    ["interaction_weight_coins", "只变金币的权重", "num", ""],
+    ["interaction_weight_charm", "只变魅力的权重", "num", ""],
+    ["interaction_weight_both", "金币和魅力都变的权重", "num", ""],
+    ["interaction_cooldown_minutes", "调教冷却（分钟）", "num", ""],
+    ["interaction_max_per_day", "调教每日次数", "num", ""],
+    ["ransom_price_coeff", "赎身价格系数（0~1）", "num", "价格 = 魅力 × 系数 × 随机[0,3]"],
+    ["ransom_cooldown_minutes", "赎身冷却（分钟）", "num", ""],
+    ["ransom_max_per_day", "赎身每日次数", "num", ""],
   ]},
   {group: "礼物", items: [
     ["gift_max_quantity", "单次送礼数量上限", "num", ""],
@@ -222,6 +234,8 @@ const GIFT_COLS = [["id", "ID"], ["name", "名称"], ["aliases", "别名（逗�
                    ["price", "价格"], ["charm", "魅力"]];
 const EVENT_COLS = [["text", "事件文本"], ["coins_min", "金币下限"],
                     ["coins_max", "金币上限"], ["weight", "权重"]];
+const INTERACTION_COLS = [["text", "互动文案"], ["tone", "语气（褒/贬/中性）"]];
+const TONES = ["褒", "贬", "中性"];
 let CFG = null;
 let curTab = "players";
 let logTimer = null;
@@ -266,7 +280,7 @@ async function refreshStatus() {
       <span>${dot(g.api_online)}微信API在线</span>
       <span>${dot(g.listener_running)}OCR监听</span>
       <span><span class="k">群</span>${esc(g.group_key || "-")}</span>
-      <span><span class="k">游标</span>${g.cursor}</span>
+      <span><span class="k">最新消息</span>${g.cursor}</span>
       <span><span class="k">队列</span>${g.queue_size}</span>
       <span><span class="k">已处理</span>${g.processed_total}</span>
       <span><span class="k">游戏侧错误</span>${esc(g.last_error || "无")}</span>
@@ -374,6 +388,7 @@ function renderConfig() {
   }
   renderTable("gifts", "礼物目录（gifts）", GIFT_COLS);
   renderTable("work_events", "打工事件表（work_events）", EVENT_COLS);
+  renderTable("slave_interactions", "调教互动表（slave_interactions）", INTERACTION_COLS);
 }
 
 function renderTable(key, title, cols) {
@@ -389,11 +404,17 @@ function renderTable(key, title, cols) {
 }
 
 function addRow(key, item) {
-  const cols = key === "gifts" ? GIFT_COLS : EVENT_COLS;
+  const cols = key === "gifts" ? GIFT_COLS
+             : key === "work_events" ? EVENT_COLS : INTERACTION_COLS;
   item = item || {};
   const tb = document.getElementById("tb_" + key);
   const tr = document.createElement("tr");
   tr.innerHTML = cols.map(([field, _]) => {
+    if (key === "slave_interactions" && field === "tone") {
+      const opts = TONES.map(t =>
+        `<option value="${t}"${item.tone === t ? " selected" : ""}>${t}</option>`).join("");
+      return `<td><select data-f="tone">${opts}</select></td>`;
+    }
     let v = item[field];
     if (field === "aliases") v = (v || []).join(",");
     return `<td><input type="text" data-f="${esc(field)}"
@@ -426,7 +447,7 @@ function collect() {
     const out = [];
     document.getElementById("tb_" + key).querySelectorAll("tr").forEach(tr => {
       const obj = {};
-      tr.querySelectorAll("input").forEach(inp => { obj[inp.dataset.f] = inp.value.trim(); });
+      tr.querySelectorAll("input,select").forEach(inp => { obj[inp.dataset.f] = inp.value.trim(); });
       out.push(convert(obj));
     });
     return out;
@@ -438,6 +459,8 @@ function collect() {
   data.work_events = collectTable("work_events", o => ({
     text: o.text, coins_min: Number(o.coins_min),
     coins_max: Number(o.coins_max), weight: Number(o.weight)}));
+  data.slave_interactions = collectTable("slave_interactions", o => ({
+    text: o.text, tone: o.tone}));
   return data;
 }
 

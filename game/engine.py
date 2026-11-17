@@ -63,7 +63,7 @@ class Engine:
         self._last_pat: dict[tuple[str, str], float] = {}
         self.paused = False
         self._paused_group: str | None = None
-        self.cursor = 0
+        self.cursor = 0  # 最后一条已接收消息的 id，不是流位置
         self.processed_total = 0
         self.last_error: str | None = None
         self.api_online: bool | None = None

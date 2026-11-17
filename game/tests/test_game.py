@@ -177,6 +177,284 @@ def test_my_slaves(env):
     assert "目前没有奴隶" in env.send("李四", "我的奴隶")
 
 
+# ---------- 调教 ----------
+
+def _buy(env, master, slave, price_rng=0.0):
+    env.rng.set_sequence([price_rng])
+    return env.send(master, f"购买奴隶@{slave}")
+
+
+def test_train_requires_own_slave(env):
+    _buy(env, "张三", "李四")
+    assert "不是你的奴隶" in env.send("王五", "调教@李四")
+    assert "不能调教自己" in env.send("张三", "调教@张三")
+
+
+def test_train_opposite_tone_adds_but(env):
+    _buy(env, "张三", "李四")
+    item = env.cfg.interactions[0]
+    assert item.tone == "贬"
+    # 贬义文案却让魅力上涨：金币 -4 正常，魅力 +5 加“但…却”
+    env.rng.set_sequence([item, 8.5, 4, -1, 5, 1])
+    reply = env.send("张三", "调教@李四")
+    assert reply.splitlines()[0] == "张三 抡起沙包甘大的拳头，上去就给 李四 一拳。"
+    assert "李四 的金币-4，但 李四 的魅力却+5" in reply
+    assert coins(env, "李四") == 196
+    assert charm(env, "李四") == 15
+
+
+def test_train_neutral_has_no_but(env):
+    _buy(env, "张三", "李四")
+    item = env.cfg.interactions[4]
+    assert item.tone == "中性"
+    env.rng.set_sequence([item, 0.5, 3, 1])  # 只变金币 +3
+    reply = env.send("张三", "调教@李四")
+    assert "李四 的金币+3" in reply
+    assert "但" not in reply and "却" not in reply
+    assert coins(env, "李四") == 203
+
+
+def test_train_cooldown_and_daily_limit(env):
+    _buy(env, "张三", "李四")
+    item = env.cfg.interactions[0]
+    env.rng.set_sequence([item, 0.5, 1, -1])
+    env.send("张三", "调教@李四")
+    assert "调教冷却中" in env.send("张三", "调教@李四", advance=6)
+    env.clock.advance(minutes=11)
+    today = env.clock.t.date().isoformat()
+    env.store.incr_daily(env.group, today, "张三", "interaction", 10, 0)
+    env.clock.advance(minutes=11)
+    assert "今天的调教次数已用完（10 次）" in env.send("张三", "调教@李四")
+
+
+def test_train_all(env):
+    env.rng.set_sequence([0.0, 0.0])
+    env.send("张三", "购买奴隶@李四")
+    env.send("张三", "购买奴隶@王五")
+    env.store.update_charm(env.group, "王五", 15.0, env.clock.t.isoformat())
+    seq = [env.cfg.interactions[0], 0.5, 2, 1,           # 李四：金币 +2
+           env.cfg.interactions[1], 8.5, 3, -1, 4, -1]   # 王五：金币 -3、魅力 -4（褒义反向）
+    env.rng.set_sequence(seq)
+    reply = env.send("张三", "调教所有奴隶")
+    lines = reply.splitlines()
+    assert lines[0] == "张三 调教奴隶："
+    assert lines[1].startswith("1. 张三 抡起沙包")
+    assert lines[1].endswith("但 李四 的金币却+2")
+    assert lines[2].startswith("2. 张三 揉了揉 王五")
+    assert "但 王五 的金币却-3，但 王五 的魅力却-4" in lines[2]
+    assert coins(env, "李四") == 202
+    assert coins(env, "王五") == 197
+    assert charm(env, "王五") == 11
+
+
+def test_train_all_caps_display(env):
+    env.send("张三", "我的金币")
+    now = env.clock.t.isoformat()
+    for i in range(21):
+        name = f"奴{i:02d}"
+        env.store.upsert_player(env.group, name, now, 200, 10)
+        env.store.set_master(env.group, name, "张三", now)
+    seq = []
+    for _ in range(21):
+        seq += [env.cfg.interactions[2], 0.5, 1, 1]
+    env.rng.set_sequence(seq)
+    reply = env.send("张三", "调教所有奴隶")
+    assert "…（共 21 个）" in reply
+    assert "20. " in reply
+    assert "21. " not in reply
+    # 未展示的第 21 个奴隶也要实际受到调教
+    assert coins(env, "奴20") == 201
+
+
+def test_train_all_no_slaves(env):
+    assert "你还没有奴隶" in env.send("张三", "调教所有奴隶")
+    assert "不是你的奴隶" in env.send("张三", "调教@李四")
+
+
+def test_train_floors(env):
+    _buy(env, "张三", "李四")
+    env.store.adjust_coins(env.group, "李四", -200, "test", None,
+                           env.clock.t.isoformat())
+    item = env.cfg.interactions[0]
+    env.rng.set_sequence([item, 0.5, 5, -1])  # 金币 -5，但余额为 0
+    assert "这次没有任何变化" in env.send("张三", "调教@李四")
+    assert coins(env, "李四") == 0
+    env.clock.advance(minutes=11)
+    env.rng.set_sequence([item, 4.0, 5, -1])  # 魅力 -5，直接按变化值结算
+    reply = env.send("张三", "调教@李四")
+    assert "李四 的魅力-5" in reply
+    assert charm(env, "李四") == 5
+
+
+def test_train_charm_floor_zero(env):
+    _buy(env, "张三", "李四")
+    env.store.update_charm(env.group, "李四", 3.0, env.clock.t.isoformat())
+    item = env.cfg.interactions[0]
+    env.rng.set_sequence([item, 4.0, 5, -1])  # 魅力 3，扣 5 → 实际只扣 3
+    reply = env.send("张三", "调教@李四")
+    assert "李四 的魅力-3" in reply
+    assert charm(env, "李四") == 0
+
+
+def test_train_ignores_charm_base(env):
+    from game.config import Config
+    from game.engine import Engine
+
+    _buy(env, "张三", "李四")
+    data = {k: env.cfg.get(k) for k in env.cfg._data}
+    data["charm_base"] = 1000
+    engine2 = Engine(Config(data), env.store, env.clock, env.rng, env.engine.ctx.log)
+    engine2.attach_sender(env.sender)
+    engine2.handle_health({"chat_title": "888 种田大队(32)",
+                           "online": True, "listener_running": True})
+    env.rng.set_sequence([env.cfg.interactions[1], 4.0, 5, 1])  # 魅力 +5
+    engine2.handle_message({"id": "998", "cursor": 998, "sender": "张三",
+                            "content": "调教@李四",
+                            "received_at": env.clock.t.isoformat()})
+    reply = env.sender.last
+    assert "李四 的魅力+5" in reply
+    assert "990" not in reply
+    assert charm(env, "李四") == 15
+
+
+def test_train_disabled_without_interactions(env):
+    from game.config import Config
+    from game.engine import Engine
+
+    _buy(env, "张三", "李四")
+    data = {k: env.cfg.get(k) for k in env.cfg._data}
+    data["slave_interactions"] = []
+    engine2 = Engine(Config(data), env.store, env.clock, env.rng, env.engine.ctx.log)
+    engine2.attach_sender(env.sender)
+    engine2.handle_health({"chat_title": "888 种田大队(32)",
+                           "online": True, "listener_running": True})
+    engine2.handle_message({"id": "999", "cursor": 999, "sender": "张三",
+                            "content": "调教@李四",
+                            "received_at": env.clock.t.isoformat()})
+    assert "暂无可用的互动内容" in env.sender.last
+
+
+def test_interaction_config_validation(env):
+    import pytest
+
+    from game.config import Config, ConfigError
+
+    data = {k: env.cfg.get(k) for k in env.cfg._data}
+    data["slave_interactions"] = [{"text": "x", "tone": "未知"}]
+    with pytest.raises(ConfigError):
+        Config(data)
+    data["slave_interactions"] = []
+    Config(data)
+
+
+def test_store_migrates_last_interact_at(tmp_path):
+    import sqlite3
+
+    from game.store import Store
+
+    path = tmp_path / "old.db"
+    conn = sqlite3.connect(path)
+    conn.execute("""CREATE TABLE players (
+        group_key TEXT NOT NULL, name TEXT NOT NULL,
+        coins INTEGER NOT NULL DEFAULT 200, charm REAL NOT NULL DEFAULT 10,
+        charm_anchor TEXT NOT NULL, master TEXT, enslaved_at TEXT,
+        is_phantom INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL,
+        last_seen_at TEXT NOT NULL, last_signin_date TEXT,
+        signin_streak INTEGER NOT NULL DEFAULT 0, last_work_at TEXT,
+        last_rebel_at TEXT, total_charm_gained REAL NOT NULL DEFAULT 0,
+        total_gift_spent INTEGER NOT NULL DEFAULT 0,
+        total_gift_charm REAL NOT NULL DEFAULT 0,
+        PRIMARY KEY (group_key, name))""")
+    conn.commit()
+    conn.close()
+
+    store = Store(path)
+    player = store.upsert_player("群", "张三", "2026-11-16T12:00:00+08:00", 200, 10)
+    assert player.last_interact_at is None
+    assert player.last_ransom_at is None
+    store.set_player_field("群", "张三", "last_interact_at",
+                           "2026-11-16T12:10:00+08:00")
+    store.set_player_field("群", "张三", "last_ransom_at",
+                           "2026-11-16T12:20:00+08:00")
+    saved = store.get_player("群", "张三")
+    assert saved.last_interact_at == "2026-11-16T12:10:00+08:00"
+    assert saved.last_ransom_at == "2026-11-16T12:20:00+08:00"
+    store.close()
+
+
+# ---------- 赎身 ----------
+
+def test_ransom_success(env):
+    env.rng.set_sequence([0.0])  # 王五 买 李四，价格 10
+    env.send("王五", "购买奴隶@李四")
+    env.rng.set_sequence([1.5])  # 10 × 1.0 × 1.5 = 15
+    reply = env.send("张三", "赎身@李四")
+    assert "张三 为 李四 赎身，支付 15 金币。" in reply
+    assert "李四 已恢复自由身，王五 获得 15 金币。" in reply
+    assert env.store.get_player(env.group, "李四").master is None
+    assert coins(env, "张三") == 185
+    assert coins(env, "王五") == 205
+
+
+def test_ransom_free(env):
+    env.rng.set_sequence([0.0])
+    env.send("王五", "购买奴隶@李四")
+    env.rng.set_sequence([0.0])  # 价格为 0
+    reply = env.send("张三", "赎身@李四")
+    assert "没有花费金币" in reply
+    assert "原主人 王五" in reply
+    assert coins(env, "张三") == 200
+    assert coins(env, "王五") == 190
+    assert env.store.get_player(env.group, "李四").master is None
+
+
+def test_ransom_permissions(env):
+    env.rng.set_sequence([0.0])
+    env.send("王五", "购买奴隶@李四")
+    assert "不能给自己赎身" in env.send("李四", "赎身@李四")
+    assert "不能赎自己的奴隶" in env.send("王五", "赎身@李四")
+    assert "不是奴隶" in env.send("张三", "赎身@赵六")
+
+
+def test_ransom_insufficient(env):
+    env.rng.set_sequence([0.0])
+    env.send("王五", "购买奴隶@李四")
+    env.send("张三", "我的金币")
+    env.store.adjust_coins(env.group, "张三", -200, "test", None,
+                           env.clock.t.isoformat())
+    env.rng.set_sequence([3.0])  # 10 × 1.0 × 3 = 30
+    reply = env.send("张三", "赎身@李四")
+    assert "金币不足（需要 30 金币，当前 0 金币）" in reply
+    assert env.store.get_player(env.group, "李四").master == "王五"
+
+
+def test_ransom_cooldown_and_daily_limit(env):
+    env.rng.set_sequence([0.0, 0.0])
+    env.send("王五", "购买奴隶@李四")
+    env.send("王五", "购买奴隶@赵六")
+    env.rng.set_sequence([1.0])
+    env.send("张三", "赎身@李四")
+    assert "赎身冷却中" in env.send("张三", "赎身@赵六", advance=6)
+    env.clock.advance(minutes=11)
+    today = env.clock.t.date().isoformat()
+    env.store.incr_daily(env.group, today, "张三", "ransom", 10, 0)
+    env.clock.advance(minutes=11)
+    assert "今天的赎身次数已用完（10 次）" in env.send("张三", "赎身@赵六")
+
+
+def test_ransom_config_validation(env):
+    import pytest
+
+    from game.config import Config, ConfigError
+
+    data = {k: env.cfg.get(k) for k in env.cfg._data}
+    data["ransom_price_coeff"] = 1.5
+    with pytest.raises(ConfigError):
+        Config(data)
+    data["ransom_price_coeff"] = 1.0
+    Config(data)
+
+
 def test_rebel_not_slave(env):
     assert "你现在是自由身" in env.send("张三", "我要自由")
 

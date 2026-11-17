@@ -21,6 +21,8 @@ class Player:
     signin_streak: int
     last_work_at: Optional[str]
     last_rebel_at: Optional[str]
+    last_interact_at: Optional[str]
+    last_ransom_at: Optional[str]
     total_charm_gained: float
     total_gift_spent: int
     total_gift_charm: float
@@ -41,6 +43,12 @@ class WorkEvent:
     coins_min: int
     coins_max: int
     weight: float
+
+
+@dataclass
+class Interaction:
+    text: str
+    tone: str
 
 
 @dataclass
