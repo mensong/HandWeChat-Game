@@ -1,5 +1,5 @@
 {
-  "api_base_url": "http://192.168.228.128:8000",
+  "api_base_url": "http://10.34.149.37:8000",
   "api_timeout_seconds": 30,
   "health_poll_seconds": 2,
   "timezone": "Asia/Shanghai",
@@ -18,7 +18,7 @@
   "bot_name": "饭人休闲传",
   "bot_name_aliases": [],
   "pat_reply_texts": [
-    "{pat} 拍了拍我，我醒啦～\n这里是本群游戏玩法总览：\n\n【金币】我的金币 / 签到 / 转账@用户名 数量 / 金币榜\n【魅力】我的魅力 / 魅力榜\n【礼物】礼物列表 / 送礼@用户名 礼物名 [数量] / 礼物榜\n【奴隶】购买奴隶@用户名 / 给他自由@用户名 / 奴隶打工 / 我的奴隶 / 我要自由\n\n签到每天领金币，送礼能加魅力。发送「金币系统」「魅力系统」「礼物系统」「奴隶系统」可看各系统详情。"
+    "{pat} 拍了拍我，我醒啦～\n发送「金币系统」「魅力系统」「礼物系统」「奴隶系统」可看各系统详情。\n这里是本群游戏玩法总览：\n【金币】我的金币 / 签到 / 转账@用户名 数量 / 金币榜\n【魅力】我的魅力 / 魅力榜\n【礼物】礼物列表 / 送礼@用户名 礼物名 [数量] / 礼物榜\n【奴隶】购买奴隶@用户名 / 给他自由@用户名 / 奴隶打工 / 我的奴隶 / 我要自由\n签到每天领金币，送礼能加魅力。"
   ],
   "pat_reply_cooldown_seconds": 10,
   "send_max_per_minute": 15,
@@ -32,13 +32,13 @@
   "charm_base": 1000,
   "charm_decay_period_days": 7,
   "charm_decay_rate": 0.1,
-  "max_slaves": 30,
-  "slave_price_coeff": 2,
-  "slave_price_random_min": 0,
-  "slave_price_random_max": 10,
-  "min_slave_price": 10,
-  "release_reward_coeff": 2,
-  "slave_work_cooldown_minutes": 30,
+  "max_slaves": 10,
+  "slave_price_coeff": 0.1,
+  "slave_price_random_min": 0.5,
+  "slave_price_random_max": 3,
+  "min_slave_price": 50,
+  "release_reward_coeff": 0.1,
+  "slave_work_cooldown_minutes": 15,
   "slave_work_max_per_day": 8,
   "rebel_cooldown_minutes": 180,
   "rebel_max_per_day": 3,
@@ -66,7 +66,7 @@
   "interaction_weight_both": 2,
   "interaction_cooldown_minutes": 10,
   "interaction_max_per_day": 10,
-  "ransom_price_coeff": 1.0,
+  "ransom_price_coeff": 1,
   "ransom_cooldown_minutes": 10,
   "ransom_max_per_day": 10,
   "signin_base_reward": 100,
@@ -156,98 +156,98 @@
   "work_events": [
     {
       "text": "在奶茶店做帮工，表现优越",
-      "coins_min": 2,
-      "coins_max": 2,
+      "coins_min": 20,
+      "coins_max": 20,
       "weight": 6
     },
     {
       "text": "扶老奶奶过马路",
-      "coins_min": 3,
-      "coins_max": 3,
+      "coins_min": 30,
+      "coins_max": 30,
       "weight": 6
     },
     {
       "text": "在工地搬砖，汗流浃背",
-      "coins_min": 4,
-      "coins_max": 4,
+      "coins_min": 40,
+      "coins_max": 40,
       "weight": 6
     },
     {
       "text": "帮邻居修电脑，收到红包",
-      "coins_min": 5,
-      "coins_max": 5,
+      "coins_min": 50,
+      "coins_max": 50,
       "weight": 6
     },
     {
       "text": "在夜市摆摊，生意兴隆",
-      "coins_min": 6,
-      "coins_max": 6,
+      "coins_min": 60,
+      "coins_max": 60,
       "weight": 6
     },
     {
       "text": "捡到钱包归还失主，获得酬谢",
-      "coins_min": 3,
-      "coins_max": 3,
+      "coins_min": 30,
+      "coins_max": 30,
       "weight": 6
     },
     {
       "text": "替人排队买奶茶",
-      "coins_min": 2,
-      "coins_max": 2,
+      "coins_min": 20,
+      "coins_max": 20,
       "weight": 6
     },
     {
       "text": "在餐厅端盘子，拿到小费",
-      "coins_min": 4,
-      "coins_max": 4,
+      "coins_min": 40,
+      "coins_max": 40,
       "weight": 6
     },
     {
       "text": "帮主人跑腿送快递",
-      "coins_min": 3,
-      "coins_max": 3,
+      "coins_min": 30,
+      "coins_max": 30,
       "weight": 6
     },
     {
       "text": "参加搬家公司临时工",
-      "coins_min": 5,
-      "coins_max": 5,
+      "coins_min": 50,
+      "coins_max": 50,
       "weight": 6
     },
     {
       "text": "扶起摔倒老人，被讹",
-      "coins_min": -5,
-      "coins_max": -5,
+      "coins_min": -50,
+      "coins_max": -50,
       "weight": 5
     },
     {
       "text": "打工时打碎盘子，赔偿",
-      "coins_min": -3,
-      "coins_max": -3,
+      "coins_min": -10,
+      "coins_max": -10,
       "weight": 5
     },
     {
       "text": "上班摸鱼被扣工资",
-      "coins_min": -2,
-      "coins_max": -2,
+      "coins_min": -10,
+      "coins_max": -10,
       "weight": 5
     },
     {
       "text": "骑车送外卖超时，被罚款",
-      "coins_min": -4,
-      "coins_max": -4,
+      "coins_min": -40,
+      "coins_max": -40,
       "weight": 5
     },
     {
       "text": "被骗子骗走零钱",
-      "coins_min": -6,
-      "coins_max": -6,
+      "coins_min": -60,
+      "coins_max": -60,
       "weight": 5
     },
     {
       "text": "在工地偷懒被发现，扣钱",
-      "coins_min": -3,
-      "coins_max": -3,
+      "coins_min": -10,
+      "coins_max": -10,
       "weight": 5
     },
     {

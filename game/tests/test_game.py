@@ -143,18 +143,18 @@ def test_work_no_slaves(env):
 def test_work_events_and_cooldown(env):
     env.rng.set_sequence([1.0, 1.0])  # purchase r=1 -> price 20
     env.send("张三", "购买奴隶@李四")
-    env.rng.set_sequence([3.0])  # weighted point 3/100 -> first positive event +2
+    env.rng.set_sequence([3.0])  # weighted point 3/100 -> first positive event +20
     reply = env.send("张三", "奴隶打工")
-    assert "为主人赚得 2 金币" in reply
-    assert coins(env, "张三") == 180 + 2
+    assert "为主人赚得 20 金币" in reply
+    assert coins(env, "张三") == 180 + 20
     env.clock.advance(minutes=5)
     reply = env.send("张三", "奴隶打工")
     assert "奴隶们还在休息" in reply
     env.clock.advance(minutes=26)
-    env.rng.set_sequence([61.0])  # negative zone -> 扶起摔倒老人，被讹 -5
+    env.rng.set_sequence([61.0])  # negative zone -> 扶起摔倒老人，被讹 -50
     reply = env.send("张三", "奴隶打工")
-    assert "让主人损失 5 金币" in reply
-    assert coins(env, "张三") == 182 - 5
+    assert "让主人损失 50 金币" in reply
+    assert coins(env, "张三") == 200 - 50
 
 
 def test_work_loss_capped_at_zero(env):

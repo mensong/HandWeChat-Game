@@ -89,6 +89,6 @@ def env(tmp_path, cfg):
     ns.sender = sender
     ns.engine = engine
     ns.send = send
-    ns.group = "888 种田大队"
+    ns.group = "888种田大队"
     yield ns
     store.close()

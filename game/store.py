@@ -265,6 +265,101 @@ class Store:
             raise LookupError(f"player not found: {name}")
         return dict(row)
 
+    def delete_player(self, group: str, name: str,
+                      purge_history: bool = False) -> dict:
+        """删除单个玩家：名下奴隶自动恢复自由身，每日计数器一并删除。
+
+        purge_history=True 时连同该玩家相关的金币流水与礼物记录一起删除。
+        """
+        with self.transaction():
+            exists = self._conn.execute(
+                "SELECT 1 FROM players WHERE group_key=? AND name=?",
+                (group, name),
+            ).fetchone()
+            if exists is None:
+                raise LookupError(f"player not found: {name}")
+            freed = self._conn.execute(
+                "UPDATE players SET master=NULL, enslaved_at=NULL "
+                "WHERE group_key=? AND master=?",
+                (group, name),
+            ).rowcount
+            self._conn.execute(
+                "DELETE FROM daily_counters WHERE group_key=? AND name=?",
+                (group, name),
+            )
+            if purge_history:
+                self._conn.execute(
+                    "DELETE FROM coin_ledger WHERE group_key=? AND (actor=? OR counterparty=?)",
+                    (group, name, name),
+                )
+                self._conn.execute(
+                    "DELETE FROM gift_events WHERE group_key=? AND (sender=? OR receiver=?)",
+                    (group, name, name),
+                )
+            self._conn.execute(
+                "DELETE FROM players WHERE group_key=? AND name=?",
+                (group, name),
+            )
+        return {"released_slaves": freed}
+
+    def delete_phantom_players(self, group: str,
+                               purge_history: bool = False) -> int:
+        """删除指定群全部影子玩家，返回删除数量。"""
+        with self.transaction():
+            names = [r["name"] for r in self._conn.execute(
+                "SELECT name FROM players WHERE group_key=? AND is_phantom=1",
+                (group,),
+            ).fetchall()]
+            if not names:
+                return 0
+            placeholders = ",".join("?" for _ in names)
+            self._conn.execute(
+                f"""UPDATE players SET master=NULL, enslaved_at=NULL
+                    WHERE group_key=? AND master IN ({placeholders})""",
+                (group, *names),
+            )
+            self._conn.execute(
+                f"DELETE FROM daily_counters WHERE group_key=? AND name IN ({placeholders})",
+                (group, *names),
+            )
+            if purge_history:
+                for name in names:
+                    self._conn.execute(
+                        "DELETE FROM coin_ledger WHERE group_key=? AND (actor=? OR counterparty=?)",
+                        (group, name, name),
+                    )
+                    self._conn.execute(
+                        "DELETE FROM gift_events WHERE group_key=? AND (sender=? OR receiver=?)",
+                        (group, name, name),
+                    )
+            cur = self._conn.execute(
+                "DELETE FROM players WHERE group_key=? AND is_phantom=1",
+                (group,),
+            )
+        return cur.rowcount
+
+    def clear_group_data(self, group: str, purge_history: bool = False) -> dict:
+        """清空指定群全部玩家与计数器；流水/礼物记录默认保留。"""
+        with self.transaction():
+            n = self._conn.execute(
+                "SELECT COUNT(*) AS c FROM players WHERE group_key=?",
+                (group,),
+            ).fetchone()["c"]
+            self._conn.execute(
+                "DELETE FROM daily_counters WHERE group_key=?", (group,),
+            )
+            if purge_history:
+                self._conn.execute(
+                    "DELETE FROM coin_ledger WHERE group_key=?", (group,),
+                )
+                self._conn.execute(
+                    "DELETE FROM gift_events WHERE group_key=?", (group,),
+                )
+            self._conn.execute(
+                "DELETE FROM players WHERE group_key=?", (group,),
+            )
+        return {"players": n, "purged_history": purge_history}
+
     def slaves(self, group: str, master: str) -> list[Player]:
         with self._lock:
             rows = self._conn.execute(

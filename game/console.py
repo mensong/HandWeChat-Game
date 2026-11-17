@@ -98,7 +98,7 @@ button.ghost { background: #2a313a; color: #d8dde3; border: 1px solid #3a434e;
       </div>
       <table>
         <thead><tr><th>玩家</th><th>金币</th><th>魅力</th><th>主人</th>
-                     <th>连签</th><th>最近活跃</th></tr></thead>
+                     <th>连签</th><th>最近活跃</th><th>操作</th></tr></thead>
         <tbody id="pbody"></tbody>
       </table>
     </section>
@@ -117,6 +117,27 @@ button.ghost { background: #2a313a; color: #d8dde3; border: 1px solid #3a434e;
       </div>
       <p class="hint">加金币填正负整数（负数扣除，余额不能为负）；设置魅力填非负数；
 解除奴隶立即生效且不发放释放奖励。玩家不存在会报错，先让对方发一条消息注册。</p>
+    </section>
+    <section>
+      <h2>危险操作</h2>
+      <div class="formline">
+        <label style="display:flex;align-items:center;gap:6px">
+          <input type="checkbox" id="purgechk"> 连同流水 / 礼物记录一起删除
+        </label>
+      </div>
+      <div class="formline">
+        <button class="ghost" onclick="cleanPhantoms()">清理本群影子玩家</button>
+        <span style="color:#6a737d" id="phantomcount"></span>
+      </div>
+      <div class="formline">
+        清空整群数据（输入群标题确认）：
+        <input type="text" id="cleargroup" style="width:220px">
+        <button class="ghost" style="background:#5a2a2a;color:#ff8a80;border-color:#7a3a3a"
+                onclick="clearGroup()">清空该群全部玩家</button>
+      </div>
+      <p class="hint">删除玩家时，其名下奴隶自动恢复自由身，每日计数器一并删除；
+金币流水与礼物记录默认保留（近 30 天榜单仍会出现已删玩家），勾选后才会一并删除。
+影子玩家是 OCR 噪声误识别产生的未发言玩家，不参与排行榜，可放心清理。</p>
     </section>
   </div>
   <div class="page" id="page_logs">
@@ -243,7 +264,7 @@ let logTimer = null;
 function esc(s) {
   const d = document.createElement("div");
   d.textContent = s == null ? "" : String(s);
-  return d.innerHTML;
+  return d.innerHTML.replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
 
 async function getJSON(url) { return (await fetch(url)).json(); }
@@ -292,20 +313,22 @@ async function refreshStatus() {
 
 async function loadPlayers() {
   const sel = document.getElementById("groupsel");
-  const s = await getJSON("/api/players" + (sel.value ? "?group=" + encodeURIComponent(sel.value) : ""));
-  if (!sel.options.length) {
-    for (const g of s.groups) {
-      const o = document.createElement("option");
-      o.value = o.textContent = g;
-      if (g === s.group) o.selected = true;
-      sel.appendChild(o);
-    }
+  const wanted = sel.value;
+  const s = await getJSON("/api/players" + (wanted ? "?group=" + encodeURIComponent(wanted) : ""));
+  sel.innerHTML = "";
+  for (const g of s.groups) {
+    const o = document.createElement("option");
+    o.value = o.textContent = g;
+    if (g === s.group) o.selected = true;
+    sel.appendChild(o);
   }
   const dl = document.getElementById("pnames");
   dl.innerHTML = "";
   const tb = document.getElementById("pbody");
   tb.innerHTML = "";
+  let phantoms = 0;
   for (const p of s.players) {
+    if (p.is_phantom) phantoms++;
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td class="${p.is_phantom ? "phantom" : ""}">${esc(p.name)}${p.is_phantom ? "（影子）" : ""}</td>
@@ -313,13 +336,65 @@ async function loadPlayers() {
       <td class="num">${Number(p.charm).toFixed(1)}</td>
       <td class="${p.master ? "master" : ""}">${esc(p.master || "—")}</td>
       <td class="num">${p.signin_streak || 0}</td>
-      <td>${esc((p.last_seen_at || "").replace("T", " ").slice(0, 19))}</td>`;
-    tr.onclick = () => { document.getElementById("pname").value = p.name; };
+      <td>${esc((p.last_seen_at || "").replace("T", " ").slice(0, 19))}</td>
+      <td><button class="ghost" data-name="${esc(p.name)}"
+                  onclick="deletePlayer(this.dataset.name)">删除</button></td>`;
+    tr.onclick = (ev) => {
+      if (ev.target.tagName === "BUTTON") return;
+      document.getElementById("pname").value = p.name;
+    };
     tb.appendChild(tr);
     const o = document.createElement("option");
     o.value = p.name;
     dl.appendChild(o);
   }
+  document.getElementById("phantomcount").textContent =
+    "当前群影子玩家 " + phantoms + " 个";
+}
+
+function purgeChecked() {
+  return document.getElementById("purgechk").checked;
+}
+
+async function deletePlayer(name) {
+  const group = document.getElementById("groupsel").value;
+  if (!confirm("确认删除玩家「" + name + "」？\\n其名下奴隶将自动恢复自由身" +
+               (purgeChecked() ? "，且相关流水/礼物记录一并删除" : "") + "。")) return;
+  const r = await postJSON("/api/players/delete",
+    {group, name, purge_history: purgeChecked()});
+  if (r.status !== 200) { show(r.data.error || "删除失败", true, "pmsg"); return; }
+  const freed = r.data.released_slaves || 0;
+  show(`已删除「${esc(name)}」` + (freed ? `，释放了 ${freed} 名奴隶` : ""), false, "pmsg");
+  loadPlayers();
+}
+
+async function cleanPhantoms() {
+  const group = document.getElementById("groupsel").value;
+  const n = parseInt((document.getElementById("phantomcount").textContent.match(/\d+/) || [0])[0], 10);
+  if (!n) { show("当前群没有影子玩家", false, "pmsg"); return; }
+  if (!confirm("确认删除 " + n + " 个影子玩家？" +
+               (purgeChecked() ? "\\n相关流水/礼物记录将一并删除。" : ""))) return;
+  const r = await postJSON("/api/players/delete_phantoms",
+    {group, purge_history: purgeChecked()});
+  if (r.status !== 200) { show(r.data.error || "清理失败", true, "pmsg"); return; }
+  show("已清理 " + r.data.deleted + " 个影子玩家", false, "pmsg");
+  loadPlayers();
+}
+
+async function clearGroup() {
+  const group = document.getElementById("groupsel").value;
+  const typed = document.getElementById("cleargroup").value.trim();
+  if (typed !== group) {
+    show("确认文字与群标题不一致", true, "pmsg");
+    return;
+  }
+  if (!confirm("确认清空群「" + group + "」的全部玩家数据？" +
+               (purgeChecked() ? "\\n该群流水/礼物记录将一并删除。" : ""))) return;
+  const r = await postJSON("/api/players/clear_group",
+    {group, confirm: typed, purge_history: purgeChecked()});
+  if (r.status !== 200) { show(r.data.error || "清空失败", true, "pmsg"); return; }
+  show("已清空 " + r.data.players + " 个玩家", false, "pmsg");
+  loadPlayers();
 }
 
 async function editPlayer() {
@@ -547,6 +622,12 @@ def build_console_handler(engine: Engine, cfg: Config, cfg_path: str):
             body = self._body()
             if self.path == "/api/players/edit":
                 self._player_edit(body)
+            elif self.path == "/api/players/delete":
+                self._player_delete(body)
+            elif self.path == "/api/players/delete_phantoms":
+                self._phantom_delete(body)
+            elif self.path == "/api/players/clear_group":
+                self._clear_group(body)
             elif self.path == "/api/config/save":
                 data = body.get("data")
                 if not isinstance(data, dict):
@@ -596,6 +677,51 @@ def build_console_handler(engine: Engine, cfg: Config, cfg_path: str):
                     self._json(400, {"error": f"unknown action: {action}"})
             except (LookupError, ValueError) as e:
                 self._json(400, {"error": str(e)})
+
+        def _player_delete(self, body: dict) -> None:
+            group = (body.get("group") or engine.tracker.key or "").strip()
+            name = (body.get("name") or "").strip()
+            purge = bool(body.get("purge_history"))
+            if not group or not name:
+                self._json(400, {"error": "group and name required"})
+                return
+            try:
+                result = engine.store.delete_player(group, name, purge)
+            except (LookupError, ValueError) as e:
+                self._json(400, {"error": str(e)})
+                return
+            engine.add_event(kind="admin", group=group, name=name,
+                             action="delete_player", result="ok",
+                             released_slaves=result["released_slaves"],
+                             purged_history=purge)
+            self._json(200, {"status": "deleted"} | result)
+
+        def _phantom_delete(self, body: dict) -> None:
+            group = (body.get("group") or engine.tracker.key or "").strip()
+            purge = bool(body.get("purge_history"))
+            if not group:
+                self._json(400, {"error": "group required"})
+                return
+            deleted = engine.store.delete_phantom_players(group, purge)
+            engine.add_event(kind="admin", group=group, action="delete_phantoms",
+                             result="ok", deleted=deleted, purged_history=purge)
+            self._json(200, {"status": "deleted", "deleted": deleted})
+
+        def _clear_group(self, body: dict) -> None:
+            group = (body.get("group") or engine.tracker.key or "").strip()
+            purge = bool(body.get("purge_history"))
+            confirm = (body.get("confirm") or "").strip()
+            if not group:
+                self._json(400, {"error": "group required"})
+                return
+            if confirm != group:
+                self._json(400, {"error": "确认文字与群标题不一致"})
+                return
+            result = engine.store.clear_group_data(group, purge)
+            engine.add_event(kind="admin", group=group, action="clear_group",
+                             result="ok", players=result["players"],
+                             purged_history=purge)
+            self._json(200, {"status": "cleared"} | result)
 
         def log_message(self, fmt, *args):
             pass

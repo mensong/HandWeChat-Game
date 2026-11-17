@@ -64,9 +64,13 @@ def normalize_text(text: str | None, allow_hash: bool = True) -> str:
 
 
 def normalize_title(title: str | None) -> str:
+    """群标题规范化：NFKC、去掉全部空白（OCR 空格噪声）、去掉尾部成员数。
+
+    例：`888 种田大队 (71)` / `888种田大队（71人）` 都规范化为 `888种田大队`。
+    """
     if not title:
         return ""
     t = unicodedata.normalize("NFKC", title)
-    t = re.sub(r"\s+", " ", t).strip()
-    t = re.sub(r"[\(（]\s*\d+\s*人?\s*[\)）]$", "", t).strip()
+    t = re.sub(r"\s+", "", t)
+    t = re.sub(r"[\(（]\d+人?[\)）]$", "", t)
     return t
