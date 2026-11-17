@@ -12,8 +12,8 @@
   ],
   "dedupe_window_seconds": 5,
   "command_rate_limit_seconds": 0,
-  "help_cooldown_seconds": 60,
-  "usage_hint_cooldown_seconds": 60,
+  "help_cooldown_seconds": 10,
+  "usage_hint_cooldown_seconds": 10,
   "reply_max_chars": 500,
   "bot_name": "饭人休闲传",
   "bot_name_aliases": [],
@@ -34,14 +34,14 @@
   "charm_decay_rate": 0.1,
   "max_slaves": 10,
   "slave_price_coeff": 0.1,
-  "slave_price_random_min": 0.5,
+  "slave_price_random_min": 0.1,
   "slave_price_random_max": 3,
   "min_slave_price": 50,
   "release_reward_coeff": 0.1,
-  "slave_work_cooldown_minutes": 15,
-  "slave_work_max_per_day": 8,
-  "rebel_cooldown_minutes": 180,
-  "rebel_max_per_day": 3,
+  "slave_work_cooldown_minutes": 5,
+  "slave_work_max_per_day": 10,
+  "rebel_cooldown_minutes": 60,
+  "rebel_max_per_day": 8,
   "rebel_master_coeff": 1,
   "rebel_slave_coeff": 1,
   "rebel_master_multipliers": [
@@ -69,11 +69,11 @@
   "ransom_price_coeff": 1,
   "ransom_cooldown_minutes": 10,
   "ransom_max_per_day": 10,
-  "signin_base_reward": 100,
-  "signin_streak_step": 20,
-  "signin_max_reward": 200,
+  "signin_base_reward": 1000,
+  "signin_streak_step": 200,
+  "signin_max_reward": 2000,
   "transfer_tax_rate": 0.05,
-  "transfer_daily_limit": 5000,
+  "transfer_daily_limit": 10000,
   "gift_max_quantity": 99,
   "gift_daily_spend_limit": 20000,
   "gift_rank_days": 30,
@@ -151,6 +151,15 @@
       ],
       "price": 5200,
       "charm": 520
+    },
+    {
+      "id": "hs",
+      "name": "黑丝",
+      "aliases": [
+        "hs"
+      ],
+      "price": 100,
+      "charm": 100
     }
   ],
   "work_events": [
@@ -273,6 +282,306 @@
       "coins_min": 0,
       "coins_max": 0,
       "weight": 2.5
+    },
+    {
+      "text": "在奶茶店摇杯摇出残影，店长多塞了一点小费",
+      "coins_min": 35,
+      "coins_max": 45,
+      "weight": 4
+    },
+    {
+      "text": "帮同学代拿快递，跑出了“快递侠”的称号",
+      "coins_min": 25,
+      "coins_max": 35,
+      "weight": 5
+    },
+    {
+      "text": "在超市理货，把泡面摆成城墙，被夸有强迫症天赋",
+      "coins_min": 45,
+      "coins_max": 55,
+      "weight": 4
+    },
+    {
+      "text": "发传单被风吹走一半，追传单追出半场马拉松",
+      "coins_min": 30,
+      "coins_max": 40,
+      "weight": 5
+    },
+    {
+      "text": "给流浪猫搭了个窝，猫没住，我先蹲进去试了试",
+      "coins_min": 15,
+      "coins_max": 25,
+      "weight": 3
+    },
+    {
+      "text": "在书店兼职收银，遇到土豪顾客说找零不用了",
+      "coins_min": 40,
+      "coins_max": 50,
+      "weight": 4
+    },
+    {
+      "text": "帮邻居遛狗，狗遛我，但工钱照拿",
+      "coins_min": 25,
+      "coins_max": 35,
+      "weight": 5
+    },
+    {
+      "text": "在早餐店包包子，包出三个歪嘴将军",
+      "coins_min": 35,
+      "coins_max": 45,
+      "weight": 4
+    },
+    {
+      "text": "参加社区志愿活动搬水，一不小心练出麒麟臂",
+      "coins_min": 20,
+      "coins_max": 30,
+      "weight": 3
+    },
+    {
+      "text": "给小朋友辅导作业，反被问懵，但家长很满意",
+      "coins_min": 60,
+      "coins_max": 80,
+      "weight": 3
+    },
+    {
+      "text": "在路边卖气球，最后一只被风买走了，前面全卖光",
+      "coins_min": 50,
+      "coins_max": 70,
+      "weight": 3
+    },
+    {
+      "text": "帮花店送花，路上被蜜蜂追着夸香",
+      "coins_min": 30,
+      "coins_max": 50,
+      "weight": 4
+    },
+    {
+      "text": "在健身房做临时保洁，把地板拖出镜面效果",
+      "coins_min": 40,
+      "coins_max": 60,
+      "weight": 3
+    },
+    {
+      "text": "帮人修自行车，修完发现多出两颗螺丝",
+      "coins_min": 35,
+      "coins_max": 45,
+      "weight": 4
+    },
+    {
+      "text": "在快递驿站分拣包裹，手速快出残影",
+      "coins_min": 45,
+      "coins_max": 65,
+      "weight": 4
+    },
+    {
+      "text": "给网店当临时客服，把“亲”说了八百遍",
+      "coins_min": 50,
+      "coins_max": 70,
+      "weight": 3
+    },
+    {
+      "text": "在电影院检票，偷偷学了两句主角台词",
+      "coins_min": 25,
+      "coins_max": 35,
+      "weight": 4
+    },
+    {
+      "text": "帮阿姨把米搬上楼，阿姨塞饮料像塞红包",
+      "coins_min": 40,
+      "coins_max": 60,
+      "weight": 3
+    },
+    {
+      "text": "在夜市卖烤肠，烤肠还没熟，我先熟了",
+      "coins_min": 70,
+      "coins_max": 90,
+      "weight": 3
+    },
+    {
+      "text": "帮人拍照，把人拍成一米八，被加了一根鸡腿钱",
+      "coins_min": 20,
+      "coins_max": 30,
+      "weight": 4
+    },
+    {
+      "text": "下雨天接了个送伞跑腿单，伞没湿，我湿了",
+      "coins_min": 35,
+      "coins_max": 55,
+      "weight": 4
+    },
+    {
+      "text": "在图书馆整理书架，顺手看了半本小说",
+      "coins_min": 30,
+      "coins_max": 40,
+      "weight": 4
+    },
+    {
+      "text": "帮人排队挂号，站成一根有毅力的电线杆",
+      "coins_min": 50,
+      "coins_max": 70,
+      "weight": 2
+    },
+    {
+      "text": "在游乐园扮玩偶，小朋友问我是不是热化了",
+      "coins_min": 60,
+      "coins_max": 80,
+      "weight": 2
+    },
+    {
+      "text": "给宠物店洗狗，狗甩我一身水还冲我笑",
+      "coins_min": 45,
+      "coins_max": 55,
+      "weight": 3
+    },
+    {
+      "text": "帮人搬家，扛箱子扛出人形叉车的气势",
+      "coins_min": 80,
+      "coins_max": 100,
+      "weight": 2
+    },
+    {
+      "text": "在菜市场帮忙看摊，一嗓子把隔壁摊主逗笑了",
+      "coins_min": 35,
+      "coins_max": 45,
+      "weight": 4
+    },
+    {
+      "text": "替人代驾一小段，客户说我开得像摇篮",
+      "coins_min": 60,
+      "coins_max": 90,
+      "weight": 2
+    },
+    {
+      "text": "帮人贴手机膜，一次成功，差点给自己颁奖",
+      "coins_min": 20,
+      "coins_max": 40,
+      "weight": 3
+    },
+    {
+      "text": "在奶茶店试喝新品，喝到打嗝还被请了一杯",
+      "coins_min": 0,
+      "coins_max": 10,
+      "weight": 2
+    },
+    {
+      "text": "上班迟到，全勤奖长了翅膀飞走",
+      "coins_min": -30,
+      "coins_max": -20,
+      "weight": 4
+    },
+    {
+      "text": "买菜忘带钱包，和老板大眼瞪小眼",
+      "coins_min": 0,
+      "coins_max": 0,
+      "weight": 2
+    },
+    {
+      "text": "帮人看包，看着看着差点把自己看丢",
+      "coins_min": 0,
+      "coins_max": 0,
+      "weight": 2
+    },
+    {
+      "text": "排队买限量点心，排到我时店员说“卖完了”",
+      "coins_min": 0,
+      "coins_max": 0,
+      "weight": 2
+    },
+    {
+      "text": "兼职发问卷，被拒绝到学会微笑营业",
+      "coins_min": -10,
+      "coins_max": -10,
+      "weight": 3
+    },
+    {
+      "text": "骑车摔了一跤，修车师傅都忍不住笑了",
+      "coins_min": -25,
+      "coins_max": -25,
+      "weight": 3
+    },
+    {
+      "text": "帮人贴膜贴出气泡，赔了一张膜的钱",
+      "coins_min": -20,
+      "coins_max": -20,
+      "weight": 3
+    },
+    {
+      "text": "送外卖汤洒了，赔餐还附赠一串道歉",
+      "coins_min": -35,
+      "coins_max": -35,
+      "weight": 3
+    },
+    {
+      "text": "在超市打碎一瓶酱油，原地表演含泪赔偿",
+      "coins_min": -15,
+      "coins_max": -15,
+      "weight": 3
+    },
+    {
+      "text": "帮人代练游戏，账号冻成冰棍",
+      "coins_min": -50,
+      "coins_max": -50,
+      "weight": 2
+    },
+    {
+      "text": "在餐厅试工打翻托盘，盘子比我还会滚",
+      "coins_min": -20,
+      "coins_max": -20,
+      "weight": 3
+    },
+    {
+      "text": "给客户报价报低了，倒贴路费买教训",
+      "coins_min": -30,
+      "coins_max": -30,
+      "weight": 2
+    },
+    {
+      "text": "在路边等活晒了一天，影子都嫌我闲",
+      "coins_min": 0,
+      "coins_max": 0,
+      "weight": 2
+    },
+    {
+      "text": "帮主人跑腿结果迷路，导航一直说“您已偏航”",
+      "coins_min": 0,
+      "coins_max": 0,
+      "weight": 2
+    },
+    {
+      "text": "兼职写文案被退回，重写到怀疑人生",
+      "coins_min": 0,
+      "coins_max": 0,
+      "weight": 2
+    },
+    {
+      "text": "在车站帮人拎箱子，收到谢礼还收获一句“力气不小”",
+      "coins_min": 30,
+      "coins_max": 50,
+      "weight": 3
+    },
+    {
+      "text": "帮小店拍宣传照，老板说拍出了米其林感觉",
+      "coins_min": 50,
+      "coins_max": 70,
+      "weight": 2
+    },
+    {
+      "text": "在小区收废品，纸箱卖掉了，我收获一身灰",
+      "coins_min": 15,
+      "coins_max": 25,
+      "weight": 4
+    },
+    {
+      "text": "帮人修电脑，成功开机那一刻像点亮灯塔",
+      "coins_min": 50,
+      "coins_max": 80,
+      "weight": 3
+    },
+    {
+      "text": "在公园卖矿泉水，天热得我差点把自己卖了",
+      "coins_min": 40,
+      "coins_max": 60,
+      "weight": 3
     }
   ],
   "slave_interactions": [
@@ -299,7 +608,295 @@
     {
       "text": "{sender} 和 {奴隶} 蹲在墙角分了一包薯片。",
       "tone": "中性"
+    },
+    {
+      "text": "{sender} 给 {奴隶} 递了杯冰可乐，说这是“高温补贴”。",
+      "tone": "褒"
+    },
+    {
+      "text": "{sender} 指挥 {奴隶} 去拿外卖，自己摆出监工架势。",
+      "tone": "中性"
+    },
+    {
+      "text": "{sender} 拍了拍 {奴隶} 的肩，夸今天没偷懒，简直是奇迹。",
+      "tone": "褒"
+    },
+    {
+      "text": "{sender} 抢走 {奴隶} 最后一块炸鸡，还假装吹口哨。",
+      "tone": "贬"
+    },
+    {
+      "text": "{sender} 和 {奴隶} 蹲门口数蚂蚁，数到第三只就吵起来了。",
+      "tone": "中性"
+    },
+    {
+      "text": "{sender} 给 {奴隶} 买了根烤肠，叮嘱“别让风看见”。",
+      "tone": "褒"
+    },
+    {
+      "text": "{sender} 让 {奴隶} 跑腿买奶茶，自己负责在家喊加油。",
+      "tone": "中性"
+    },
+    {
+      "text": "{sender} 嫌 {奴隶} 动作慢，扣了一颗糖当“时间税”。",
+      "tone": "贬"
+    },
+    {
+      "text": "{sender} 帮 {奴隶} 理好歪衣领，顺手把呆毛也拍平了。",
+      "tone": "褒"
+    },
+    {
+      "text": "{sender} 和 {奴隶} 抢遥控器，抢出了武林大会的气势。",
+      "tone": "中性"
+    },
+    {
+      "text": "{sender} 把 {奴隶} 的作业本合上，宣布“打工时间到”。",
+      "tone": "中性"
+    },
+    {
+      "text": "{sender} 往 {奴隶} 手里塞纸巾，说汗擦擦，别腌入味。",
+      "tone": "褒"
+    },
+    {
+      "text": "{sender} 假装没看见 {奴隶} 偷吃零食，演技略显浮夸。",
+      "tone": "中性"
+    },
+    {
+      "text": "{sender} 让 {奴隶} 站门口迎宾，自己躲阴凉处当幕后老板。",
+      "tone": "贬"
+    },
+    {
+      "text": "{sender} 给 {奴隶} 讲冷笑话，冷到两人一起打哆嗦。",
+      "tone": "中性"
+    },
+    {
+      "text": "{sender} 夸 {奴隶} 今天没闯祸，夸得自己都不太信。",
+      "tone": "褒"
+    },
+    {
+      "text": "{sender} 把 {奴隶} 刚叠好的衣服弄乱，还说是在“测试弹性”。",
+      "tone": "贬"
+    },
+    {
+      "text": "{sender} 和 {奴隶} 蹲路边吃盒饭，像两个临时NPC。",
+      "tone": "中性"
+    },
+    {
+      "text": "{sender} 让 {奴隶} 写今日总结，自己负责在旁边点头。",
+      "tone": "中性"
+    },
+    {
+      "text": "{sender} 给 {奴隶} 系上围裙，还打了个蝴蝶结。",
+      "tone": "中性"
+    },
+    {
+      "text": "{sender} 把 {奴隶} 的闹钟调早十分钟，深藏功与名。",
+      "tone": "贬"
+    },
+    {
+      "text": "{sender} 给 {奴隶} 留了半块蛋糕，叉子也留了，算仁慈。",
+      "tone": "褒"
+    },
+    {
+      "text": "{sender} 让 {奴隶} 去阳台收衣服，自己继续追剧到高潮。",
+      "tone": "中性"
+    },
+    {
+      "text": "{sender} 摸摸 {奴隶} 的头说辛苦了，摸完还擦了擦手。",
+      "tone": "褒"
+    },
+    {
+      "text": "{sender} 和 {奴隶} 比赛谁先跑到小卖部，输的人请辣条。",
+      "tone": "中性"
+    },
+    {
+      "text": "{sender} 把 {奴隶} 的零花钱记在小本本上，字还怪工整。",
+      "tone": "中性"
+    },
+    {
+      "text": "{sender} 让 {奴隶} 试吃新菜，表情比菜还精彩。",
+      "tone": "中性"
+    },
+    {
+      "text": "{sender} 嫌 {奴隶} 唱歌跑调，默默戴上了耳机。",
+      "tone": "贬"
+    },
+    {
+      "text": "{sender} 给 {奴隶} 带冰水，顺手拧开瓶盖显摆力气。",
+      "tone": "褒"
+    },
+    {
+      "text": "{sender} 和 {奴隶} 一起踩纸箱卖废品，踩出了节奏感。",
+      "tone": "中性"
+    },
+    {
+      "text": "{sender} 让 {奴隶} 找遥控器，结果就在对方屁股底下。",
+      "tone": "中性"
+    },
+    {
+      "text": "{sender} 把 {奴隶} 的鞋带系在一起，蹲旁边等好戏。",
+      "tone": "贬"
+    },
+    {
+      "text": "{sender} 给 {奴隶} 发“今天表现不错”，还配了个大拇指。",
+      "tone": "褒"
+    },
+    {
+      "text": "{sender} 让 {奴隶} 去拿快递，自己负责喊“辛苦啦”。",
+      "tone": "中性"
+    },
+    {
+      "text": "{sender} 和 {奴隶} 分一副耳机听歌，一人一只像在接头。",
+      "tone": "褒"
+    },
+    {
+      "text": "{sender} 给 {奴隶} 的泡面加了两根青菜，宣布营养升级。",
+      "tone": "褒"
+    },
+    {
+      "text": "{sender} 让 {奴隶} 替自己排队，自己溜去逛街还发定位。",
+      "tone": "贬"
+    },
+    {
+      "text": "{sender} 和 {奴隶} 石头剪刀布，输的人倒垃圾，结果有人耍赖。",
+      "tone": "中性"
+    },
+    {
+      "text": "{sender} 给 {奴隶} 递小风扇，说别热成表情包。",
+      "tone": "褒"
+    },
+    {
+      "text": "{sender} 把 {奴隶} 刚扫的地踩出脚印，还说是艺术。",
+      "tone": "贬"
+    },
+    {
+      "text": "{sender} 让 {奴隶} 照看盆栽，浇水量像在泄洪。",
+      "tone": "中性"
+    },
+    {
+      "text": "{sender} 和 {奴隶} 研究泡面新吃法，最后决定干啃。",
+      "tone": "中性"
+    },
+    {
+      "text": "{sender} 夸 {奴隶} 今天没顶嘴，怀疑对方被调包了。",
+      "tone": "褒"
+    },
+    {
+      "text": "{sender} 把 {奴隶} 的椅子往后挪，假装是地太滑。",
+      "tone": "贬"
+    },
+    {
+      "text": "{sender} 给 {奴隶} 留了张便签“记得吃饭”，还画了个歪笑脸。",
+      "tone": "褒"
+    },
+    {
+      "text": "{sender} 让 {奴隶} 帮忙拎包，自己两手空空像领导视察。",
+      "tone": "中性"
+    },
+    {
+      "text": "{sender} 和 {奴隶} 给流浪猫添水，猫喝完头也不回。",
+      "tone": "褒"
+    },
+    {
+      "text": "{sender} 嫌 {奴隶} 挡路，把人轻轻拨到一边像挪盆栽。",
+      "tone": "贬"
+    },
+    {
+      "text": "{sender} 给 {奴隶} 演示快速叠衣服，叠完自己找不到袖子。",
+      "tone": "中性"
+    },
+    {
+      "text": "{sender} 和 {奴隶} 约定谁先攒够钱谁请客，然后一起装穷。",
+      "tone": "中性"
+    },
+    {
+      "text": "{sender} 把 {奴隶} 抵在墙边，凑近耳边低声说：“今天乖不乖？”",
+      "tone": "中性"
+    },
+    {
+      "text": "{sender} 捏了捏 {奴隶} 的下巴，看了两秒，又若无其事地松开。",
+      "tone": "中性"
+    },
+    {
+      "text": "{sender} 给 {奴隶} 披上外套，手指在领口停了一下才收回。",
+      "tone": "褒"
+    },
+    {
+      "text": "{sender} 把 {奴隶} 拉近半步，低声说：“别乱动，让我看看。”",
+      "tone": "中性"
+    },
+    {
+      "text": "{sender} 喂了 {奴隶} 一口吃的，看着对方耳尖慢慢变红。",
+      "tone": "褒"
+    },
+    {
+      "text": "{sender} 慢条斯理地帮 {奴隶} 整理领带，最后轻轻一拉：“好了。”",
+      "tone": "中性"
+    },
+    {
+      "text": "{sender} 揉了揉 {奴隶} 的头发，低声说：“这么乖，会让人想欺负。”",
+      "tone": "中性"
+    },
+    {
+      "text": "{sender} 把 {奴隶} 的手腕轻轻扣住，又笑着放开：“这次先放过你。”",
+      "tone": "中性"
+    },
+    {
+      "text": "{sender} 抬了抬下巴，示意 {奴隶} 站好，语气淡淡：“我让你动了吗？”",
+      "tone": "中性"
+    },
+    {
+      "text": "{sender} 扣住 {奴隶} 的手腕，低头看了一眼：“乖一点，别让我说第二遍。”",
+      "tone": "中性"
+    },
+    {
+      "text": "{sender} 把 {奴隶} 的下巴轻轻抬起，端详了两秒：“今天倒是很会装乖。”",
+      "tone": "中性"
+    },
+    {
+      "text": "{sender} 慢条斯理地收走 {奴隶} 手里的东西：“我批准了吗？先放我这儿。”",
+      "tone": "贬"
+    },
+    {
+      "text": "{sender} 靠近 {奴隶} 耳边压低声音：“再不听话，今晚的零花钱就别想了。”",
+      "tone": "中性"
+    },
+    {
+      "text": "{sender} 把 {奴隶} 按回座位上，手没有立刻松开：“坐好，听我说完。”",
+      "tone": "中性"
+    },
+    {
+      "text": "{sender} 看着 {奴隶} 明显僵了一下，笑了一声：“紧张什么，我又没说不罚。”",
+      "tone": "中性"
+    },
+    {
+      "text": "{sender} 把 {奴隶} 领到身边站定，满意地点点头：“这才像话。”",
+      "tone": "褒"
+    },
+    {
+      "text": "{sender} 轻轻拍了拍 {奴隶} 的脸侧，语气不急不缓：“记住，谁说了算。”",
+      "tone": "中性"
+    },
+    {
+      "text": "{sender} 把 {奴隶} 的衣领整理好，最后慢悠悠补了一句：“别让我亲自教你规矩。”",
+      "tone": "中性"
     }
   ],
-  "web_host": ""
+  "web_host": "",
+  "chat_coins_per_message": 10,
+  "chat_coins_daily_cap": 1000,
+  "command_aliases": {
+    "购买奴隶": [
+      "购买",
+      "买下"
+    ],
+    "金币榜": [
+      "金币排名",
+      "金币排行"
+    ],
+    "魅力榜": [
+      "魅力排名",
+      "魅力排行"
+    ]
+  }
 }

@@ -765,3 +765,29 @@ def test_pat_disabled_without_texts(env):
                             "content": "“A”拍了拍“童声微蔓”",
                             "received_at": env.clock.t.isoformat()})
     assert env.sender.sent == []
+
+
+# ---------- @ 前缀形式 ----------
+
+def test_mention_query(env):
+    env.send("李四", "我的金币")
+    reply = env.send("张三", "@李四我的金币")
+    assert "李四 当前金币" in reply
+
+
+def test_mention_action_rejected(env):
+    env.send("李四", "我的金币")
+    reply = env.send("张三", "@李四签到")
+    assert "「签到」不支持@别人代执行" in reply
+
+
+def test_mention_purchase_fallback(env):
+    env.rng.set_sequence([1.0])
+    reply = env.send("张三", "@李四购买奴隶")  # 李四未注册 → 关键字切分兜底
+    assert "购买成功，花费 20 金币" in reply
+    assert env.store.get_player(env.group, "李四").master == "张三"
+
+
+def test_mention_gift(env):
+    reply = env.send("张三", "@李四送礼玫瑰")
+    assert "送给 李四 ×1 玫瑰，花费 10 金币" in reply

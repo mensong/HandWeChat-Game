@@ -25,13 +25,16 @@ def effective_charm(ctx, group: str, player, now=None) -> tuple[float, str]:
     return player.charm, player.charm_anchor
 
 
-def my_charm(ctx, group: str, sender: str) -> str:
-    player = ctx.store.get_player(group, sender)
+def my_charm(ctx, group: str, sender: str, subject: str | None = None) -> str:
+    name = subject or sender
+    player = ctx.store.get_player(group, name)
+    if player is None:
+        return replies.my_charm(name, ctx.cfg.get("charm_base"), None, 0)
     charm, _anchor = effective_charm(ctx, group, player)
     rank = None
     if not player.is_phantom:
         rank = ctx.store.charm_rank_position(group, charm)
-    return replies.my_charm(sender, charm, rank, player.total_charm_gained)
+    return replies.my_charm(name, charm, rank, player.total_charm_gained)
 
 
 def charm_rank(ctx, group: str) -> str:

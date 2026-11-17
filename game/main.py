@@ -9,7 +9,7 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 from .config import Config, load_config
-from .console import build_console_server
+from .console import build_console_server, make_reload_callback
 from .engine import Engine
 from .rng import Rng
 from .send_queue import SendQueue
@@ -56,11 +56,22 @@ async def bootstrap(client: WechatClient, engine: Engine) -> None:
 
 async def ws_loop(client: WechatClient, engine: Engine) -> None:
     backoff_idx = 0
+    # 断线重连期间同一条错误会每轮复现，只记首次；收到 ready 视为恢复并重置。
+    last_evt: tuple[str, str] | None = None
+
+    def record(kind: str, message: str = "") -> None:
+        nonlocal last_evt
+        if (kind, message) == last_evt:
+            return
+        last_evt = (kind, message)
+        engine.add_event(kind=kind, **({"message": message} if message else {}))
+
     while True:
         try:
             async for frame in client.stream_frames():
                 if frame.get("type") == "ready":
                     backoff_idx = 0
+                    last_evt = None
                     log.info("websocket ready: buffer_size=%s", frame.get("buffer_size"))
                     continue
                 items = frame.get("items", [])
@@ -73,14 +84,14 @@ async def ws_loop(client: WechatClient, engine: Engine) -> None:
                 if items and items[-1].get("cursor") is not None:
                     engine.set_cursor(int(items[-1]["cursor"]))
             log.warning("websocket closed by server")
-            engine.add_event(kind="ws_closed")
+            record("ws_closed")
         except ApiError as e:
             engine.last_error = f"ws: {e.code}"
-            engine.add_event(kind="ws_error", message=str(e))
+            record("ws_error", str(e))
             log.warning("websocket error: %s", e)
         except Exception as e:
             engine.last_error = "ws: unexpected"
-            engine.add_event(kind="ws_error", message=type(e).__name__)
+            record("ws_error", type(e).__name__)
             log.exception("websocket unexpected error")
         await asyncio.sleep(BACKOFF_STEPS[backoff_idx])
         backoff_idx = min(backoff_idx + 1, len(BACKOFF_STEPS) - 1)
@@ -109,7 +120,9 @@ async def async_main(cfg: Config, db_path: str, cfg_path: str) -> None:
     engine.attach_sender(queue)
     log.info("game service starting, db=%s api=%s", db_path, cfg.get("api_base_url"))
 
-    server = build_console_server(engine, cfg, cfg_path)
+    loop = asyncio.get_running_loop()
+    reload_callback = make_reload_callback(engine, queue, loop, log)
+    server = build_console_server(engine, cfg, cfg_path, reload_callback)
     log.info("console listening on http://%s:%d/", cfg.get("web_host"),
              cfg.get("health_port"))
     await bootstrap(client, engine)

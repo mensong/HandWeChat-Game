@@ -13,6 +13,7 @@ DEFAULTS = {
 
     "allow_hash_prefix": True,
     "ignore_senders": ["我", "对方", "未知", ""],
+    "command_aliases": {},
     "dedupe_window_seconds": 5,
     "command_rate_limit_seconds": 2,
     "help_cooldown_seconds": 60,
@@ -77,6 +78,8 @@ DEFAULTS = {
     "signin_base_reward": 10,
     "signin_streak_step": 2,
     "signin_max_reward": 24,
+    "chat_coins_per_message": 10,
+    "chat_coins_daily_cap": 500,
     "transfer_tax_rate": 0.05,
     "transfer_daily_limit": 5000,
 
@@ -118,6 +121,10 @@ _POSITIVE_FLOAT_KEYS = [
 
 class ConfigError(Exception):
     pass
+
+
+# 这些参数涉及启动时建立的连接/绑定/时钟，热加载无法生效，改动后需重启
+RESTART_KEYS = {"api_base_url", "web_host", "health_port", "timezone"}
 
 
 INTERACTION_TONES = ("褒", "贬", "中性")
@@ -199,6 +206,16 @@ class Config:
             raise ConfigError("allowed_groups must be a list")
         if not isinstance(d["ignore_senders"], list):
             raise ConfigError("ignore_senders must be a list")
+        ca = d["command_aliases"]
+        if not isinstance(ca, dict):
+            raise ConfigError("command_aliases must be an object")
+        for canonical, alist in ca.items():
+            if not isinstance(canonical, str) or not canonical:
+                raise ConfigError("command_aliases keys must be non-empty strings")
+            if not isinstance(alist, list) or any(not isinstance(a, str) or not a
+                                                  for a in alist):
+                raise ConfigError(
+                    f"command_aliases[{canonical}] must be a list of non-empty strings")
         if not isinstance(d["bot_name"], str):
             raise ConfigError("bot_name must be a string")
         for k in ("bot_name_aliases", "pat_reply_texts"):

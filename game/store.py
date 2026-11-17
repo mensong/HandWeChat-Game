@@ -174,6 +174,19 @@ class Store:
             return self.get_player(group, max(candidates, key=len))
         return None
 
+    def match_player_prefix(self, group: str, text: str) -> Optional[str]:
+        """@ 前缀形式：在群用户列表里找最长名字，使其是 text 的前缀。"""
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT name FROM players WHERE group_key=?", (group,)
+            ).fetchall()
+        low = text.lower()
+        candidates = [r["name"] for r in rows
+                      if r["name"] and low.startswith(r["name"].lower())]
+        if not candidates:
+            return None
+        return max(candidates, key=len)
+
     def get_or_create_target(self, group: str, name: str, now_iso: str,
                              initial_coins: int, charm_base: float,
                              auto_create: bool) -> Optional[Player]:

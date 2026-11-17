@@ -160,7 +160,8 @@ button.ghost { background: #2a313a; color: #d8dde3; border: 1px solid #3a434e;
         <span id="msg"></span>
       </div>
       <p class="hint">保存前会用游戏校验器检查，非法配置不会被写入。
-保存后提示重启 game.main 生效。</p>
+保存后自动热加载、立即生效（改动会写入动作日志）；
+仅 api_base_url、web_host、health_port、timezone 四项需重启 game.main 生效。</p>
       <div id="form"></div>
     </section>
   </div>
@@ -182,6 +183,7 @@ const META = [
     ["command_rate_limit_seconds", "单用户指令间隔（秒）", "num", ""],
     ["help_cooldown_seconds", "帮助指令冷却（秒）", "num", ""],
     ["usage_hint_cooldown_seconds", "用法提示冷却（秒）", "num", ""],
+    ["command_aliases", "指令别名", "json", '如 {"购买奴隶":["购买","买下"]}，键为规范指令名，未知键忽略'],
     ["reply_max_chars", "单条回复上限（字符）", "num", ""],
   ]},
   {group: "拍一拍", items: [
@@ -206,6 +208,8 @@ const META = [
     ["signin_base_reward", "签到基础奖励", "num", ""],
     ["signin_streak_step", "连签每日加成", "num", ""],
     ["signin_max_reward", "签到奖励上限", "num", ""],
+    ["chat_coins_per_message", "每条消息金币奖励", "num", "0=关闭聊天收入"],
+    ["chat_coins_daily_cap", "聊天收入每日上限", "num", "0=不设上限"],
     ["transfer_tax_rate", "转账手续费率（0~1）", "num", ""],
     ["transfer_daily_limit", "每日转账转出上限", "num", ""],
   ]},
@@ -545,7 +549,18 @@ async function saveConfig() {
   catch (e) { show("保存失败：" + e.message, true, "msg"); return; }
   const r = await postJSON("/api/config/save", {data});
   if (r.status !== 200) { show("保存失败：" + (r.data.error || ""), true, "msg"); return; }
-  show("已保存到配置文件。重启 game.main 后生效。", false, "msg");
+  if (r.data.hot_reload_error) {
+    show("已保存到文件，但热加载失败：" + r.data.hot_reload_error +
+         "。重启 game.main 后生效。", true, "msg");
+    return;
+  }
+  const rr = r.data.restart_required || [];
+  if (rr.length) {
+    show("已保存并热加载生效；以下参数需重启：" + rr.join("、"), false, "msg");
+  } else {
+    show("已保存并热加载生效（改动 " + (r.data.changed || []).length + " 项）",
+         false, "msg");
+  }
 }
 
 showTab("players");
@@ -558,7 +573,48 @@ setInterval(() => { if (curTab === "logs") loadLogs(); }, 5000);
 """
 
 
-def build_console_handler(engine: Engine, cfg: Config, cfg_path: str):
+def make_reload_callback(engine: Engine, queue, loop, log):
+    """返回热加载回调：写入配置文件后调用，把新配置原子替换进运行时对象。
+
+    在事件循环线程内执行替换（经 call_soon_threadsafe 调度），
+    保证热加载发生在两条指令之间；回调阻塞至替换完成（最多 5 秒）。
+    """
+    from .config import RESTART_KEYS
+
+    def reload(data: dict) -> dict:
+        from .config import Config
+        new_cfg = Config(data)
+        old = engine.cfg
+        changed = sorted(k for k, v in new_cfg.as_dict().items() if old.get(k) != v)
+        restart_required = sorted(k for k in RESTART_KEYS if old.get(k) != new_cfg.get(k))
+        done = threading.Event()
+        errors: list[str] = []
+
+        def apply() -> None:
+            try:
+                engine.apply_config(new_cfg)
+                queue.cfg = new_cfg
+                engine.add_event(kind="config_reloaded", changed=len(changed),
+                                 restart_required=restart_required)
+                log.info("config hot-reloaded: changed=%s restart_required=%s",
+                         changed, restart_required)
+            except Exception as e:  # pragma: no cover
+                errors.append(str(e))
+            finally:
+                done.set()
+
+        loop.call_soon_threadsafe(apply)
+        if not done.wait(5):
+            raise RuntimeError("热加载超时")
+        if errors:
+            raise RuntimeError(errors[0])
+        return {"changed": changed, "restart_required": restart_required}
+
+    return reload
+
+
+def build_console_handler(engine: Engine, cfg: Config, cfg_path: str,
+                          reload_callback=None):
     class Handler(BaseHTTPRequestHandler):
         def _json(self, status: int, payload: dict) -> None:
             raw = json.dumps(payload, ensure_ascii=False).encode("utf-8")
@@ -640,7 +696,16 @@ def build_console_handler(engine: Engine, cfg: Config, cfg_path: str):
                 except Exception as e:
                     self._json(400, {"error": str(e)})
                 else:
-                    self._json(200, {"status": "saved"})
+                    if reload_callback is not None:
+                        try:
+                            info = reload_callback(data)
+                        except Exception as e:
+                            self._json(200, {"status": "saved",
+                                             "hot_reload_error": str(e)})
+                            return
+                        self._json(200, {"status": "saved", **info})
+                    else:
+                        self._json(200, {"status": "saved"})
             else:
                 self._json(404, {"error": "not found"})
 
@@ -729,8 +794,9 @@ def build_console_handler(engine: Engine, cfg: Config, cfg_path: str):
     return Handler
 
 
-def build_console_server(engine: Engine, cfg: Config, cfg_path: str) -> ThreadingHTTPServer:
-    handler = build_console_handler(engine, cfg, cfg_path)
+def build_console_server(engine: Engine, cfg: Config, cfg_path: str,
+                         reload_callback=None) -> ThreadingHTTPServer:
+    handler = build_console_handler(engine, cfg, cfg_path, reload_callback)
     server = ThreadingHTTPServer((cfg.get("web_host"), cfg.get("health_port")), handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     return server

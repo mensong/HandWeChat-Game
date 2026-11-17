@@ -28,12 +28,33 @@ class FakeEngine:
         self.cursor = 0
         self.messages = []
         self.last_error = None
+        self.events = []
 
     def set_cursor(self, cursor):
         self.cursor = cursor
 
     def handle_message(self, msg):
         self.messages.append(msg)
+
+    def add_event(self, kind, **fields):
+        self.events.append({"kind": kind, **fields})
+
+
+class FlakyClient:
+    """每次连接都失败；recover_on 指定的那一次先发 ready 再失败。"""
+
+    def __init__(self, error, recover_on=0):
+        self.error = error
+        self.recover_on = recover_on
+        self.connects = 0
+
+    async def stream_frames(self):
+        self.connects += 1
+        if self.connects > 3:
+            await asyncio.sleep(3600)
+        if self.connects == self.recover_on:
+            yield {"type": "ready", "buffer_size": 0}
+        raise self.error
 
 
 def run_loop(client):
@@ -106,3 +127,23 @@ def test_ws_loop_drops_frame_without_is_latest():
 
     assert engine.cursor == 11
     assert engine.messages == []
+
+
+def test_ws_loop_records_repeated_ws_error_once(monkeypatch):
+    monkeypatch.setattr("game.main.BACKOFF_STEPS", [0])
+    client = FlakyClient(
+        ApiError("NETWORK_ERROR", "[WinError 1225] 远程计算机拒绝网络连接。"))
+
+    engine = run_loop(client)
+
+    assert [e["kind"] for e in engine.events] == ["ws_error"]
+    assert engine.last_error == "ws: NETWORK_ERROR"
+
+
+def test_ws_loop_records_ws_error_again_after_ready(monkeypatch):
+    monkeypatch.setattr("game.main.BACKOFF_STEPS", [0])
+    client = FlakyClient(ApiError("NETWORK_ERROR", "closed"), recover_on=2)
+
+    engine = run_loop(client)
+
+    assert [e["kind"] for e in engine.events] == ["ws_error", "ws_error"]

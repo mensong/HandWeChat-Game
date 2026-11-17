@@ -13,7 +13,7 @@ class Dispatcher:
     def dispatch(self, cmd: Command, group: str, sender: str) -> str | None:
         ctx = self.ctx
         if cmd.name == "my_coins":
-            return coins.my_coins(ctx, group, sender)
+            return coins.my_coins(ctx, group, sender, subject=cmd.mention)
         if cmd.name == "sign_in":
             return coins.sign_in(ctx, group, sender)
         if cmd.name == "transfer":
@@ -23,7 +23,7 @@ class Dispatcher:
         if cmd.name == "coins_help":
             return coins.help(ctx, group)
         if cmd.name == "my_charm":
-            return charm.my_charm(ctx, group, sender)
+            return charm.my_charm(ctx, group, sender, subject=cmd.mention)
         if cmd.name == "charm_rank":
             return charm.charm_rank(ctx, group)
         if cmd.name == "charm_help":
@@ -43,7 +43,7 @@ class Dispatcher:
         if cmd.name == "slave_work":
             return slaves.work(ctx, group, sender)
         if cmd.name == "my_slaves":
-            return slaves.my_slaves(ctx, group, sender)
+            return slaves.my_slaves(ctx, group, sender, subject=cmd.mention)
         if cmd.name == "train_slave":
             return slaves.train(ctx, group, sender, cmd.target)
         if cmd.name == "train_all_slaves":

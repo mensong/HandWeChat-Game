@@ -9,7 +9,8 @@ from .config import Config
 from .context import Ctx
 from .dispatcher import Dispatcher
 from .models import Pat
-from .parser import HELP_COMMANDS, parse, parse_pat, usage_hint
+from .parser import (HELP_COMMANDS, MENTION_CMD_LABELS, MENTION_QUERY_COMMANDS,
+                     MENTION_TARGET_COMMANDS, parse, parse_pat, usage_hint)
 from .replies import pat_reply
 from .store import Store
 from .util import fmt_iso, normalize_text, normalize_title
@@ -119,7 +120,8 @@ class Engine:
             return
         self.store.upsert_player(group, sender, fmt_iso(now),
                                  self.cfg.get("initial_coins"), self.cfg.get("charm_base"))
-        cmd = parse(text, self.cfg)
+        self._award_chat_coins(group, sender, now)
+        cmd = parse(text, self.cfg, self._match_mention_name)
         started = time.monotonic()
         if cmd is None:
             hint = usage_hint(text)
@@ -127,6 +129,13 @@ class Engine:
                 self._maybe_send(group, sender, hint, self._last_usage,
                                  self.cfg.get("usage_hint_cooldown_seconds"), now)
             self._log_command(group, sender, "none", "ignored", started)
+            return
+        if cmd.mention and cmd.name not in MENTION_QUERY_COMMANDS \
+                and cmd.name not in MENTION_TARGET_COMMANDS:
+            label = MENTION_CMD_LABELS.get(cmd.name, cmd.name)
+            self._log_command(group, sender, cmd.name, "mention_rejected", started)
+            if self._sender is not None:
+                self._sender.enqueue(f"「{label}」不支持@别人代执行。")
             return
         if cmd.name in HELP_COMMANDS:
             last = self._last_help.get((group, sender))
@@ -156,6 +165,9 @@ class Engine:
         self._log_command(group, sender, cmd.name, "ok", started, detail)
         if reply and self._sender is not None:
             self._sender.enqueue(reply)
+
+    def _match_mention_name(self, prefix: str) -> str | None:
+        return self.store.match_player_prefix(self.tracker.key or "", prefix)
 
     # ---------- internals ----------
 
@@ -208,6 +220,33 @@ class Engine:
                           detail=reply.split("\n", 1)[0][:120])
         if self._sender is not None:
             self._sender.enqueue(reply)
+
+    def apply_config(self, new_cfg: Config) -> None:
+        """热加载：整体替换运行时配置引用。
+
+        消息处理在事件循环内单线程串行，本方法通过 loop.call_soon_threadsafe
+        调度执行，保证替换发生在两条指令之间，不会出现新旧参数混用。
+        """
+        self.cfg = new_cfg
+        self.ctx.cfg = new_cfg
+        self.tracker.cfg = new_cfg
+
+    def _award_chat_coins(self, group: str, sender: str, now) -> None:
+        """聊天收入：每条消息 +chat_coins_per_message 金币，每日累计不超过
+        chat_coins_daily_cap（cap<=0 表示不设上限；per_message<=0 关闭该来源）。"""
+        per = self.cfg.get("chat_coins_per_message")
+        if per <= 0:
+            return
+        cap = self.cfg.get("chat_coins_daily_cap")
+        today = now.date().isoformat()
+        _, used = self.store.get_daily(group, today, sender, "chat")
+        award = min(per, cap - used) if cap > 0 else per
+        if award <= 0:
+            return
+        ts = fmt_iso(now)
+        with self.store.transaction():
+            self.store.adjust_coins(group, sender, award, "chat", None, ts)
+            self.store.incr_daily(group, today, sender, "chat", 1, award)
 
     def add_event(self, kind: str, **fields) -> None:
         entry = {"ts": fmt_iso(self.clock()), "kind": kind}

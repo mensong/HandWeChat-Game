@@ -190,3 +190,88 @@ def test_pat_parse_rejects():
     assert parse_pat("我今天拍了拍你的头") is None
     assert parse_pat("张三拍了拍李四") is None
     assert parse_pat("“张三”拍了拍“”") is None
+
+
+def _matcher(names):
+    def match(text):
+        low = text.lower()
+        cands = [n for n in names if n and low.startswith(n.lower())]
+        return max(cands, key=len) if cands else None
+    return match
+
+
+def test_mention_query(cfg):
+    m = _matcher(["李四"])
+    cmd = parse(n("@李四我的金币"), cfg, m)
+    assert (cmd.name, cmd.mention) == ("my_coins", "李四")
+    cmd = parse(n("@李四我的奴隶"), cfg, m)
+    assert (cmd.name, cmd.mention) == ("my_slaves", "李四")
+
+
+def test_mention_target_commands(cfg):
+    m = _matcher(["李四"])
+    cmd = parse(n("@李四购买奴隶"), cfg, m)
+    assert (cmd.name, cmd.target, cmd.mention) == ("purchase_slave", "李四", "李四")
+    cmd = parse(n("@李四给他自由"), cfg, m)
+    assert (cmd.name, cmd.target) == ("release_slave", "李四")
+    cmd = parse(n("@李四赎身"), cfg, m)
+    assert (cmd.name, cmd.target) == ("ransom_slave", "李四")
+    cmd = parse(n("@李四送礼玫瑰2"), cfg, m)
+    assert (cmd.target, cmd.gift, cmd.count) == ("李四", "玫瑰", 2)
+    cmd = parse(n("@李四转账100"), cfg, m)
+    assert (cmd.target, cmd.amount) == ("李四", 100)
+
+
+def test_mention_longest_name_wins(cfg):
+    m = _matcher(["张三", "张三丰"])
+    cmd = parse(n("@张三丰签到"), cfg, m)
+    assert cmd.mention == "张三丰"
+
+
+def test_mention_unregistered_fallback(cfg):
+    m = _matcher(["李四"])
+    cmd = parse(n("@新张三购买奴隶"), cfg, m)
+    assert (cmd.name, cmd.target) == ("purchase_slave", "新张三")
+    # 未注册目标 + 不含指令关键字 → 静默忽略
+    assert parse(n("@路人甲你好"), cfg, m) is None
+
+
+def test_mention_own_target_wins(cfg):
+    m = _matcher(["李四"])
+    cmd = parse(n("@李四购买奴隶@王五"), cfg, m)
+    assert cmd.target == "王五"
+
+
+def test_mention_alone_ignored(cfg):
+    m = _matcher(["李四"])
+    assert parse(n("@李四"), cfg, m) is None
+    assert parse(n("@李四你好"), cfg, m) is None
+
+
+def test_command_aliases(cfg):
+    from game.config import Config
+    data = {**cfg.as_dict(), "command_aliases": {"购买奴隶": ["购买", "买下"],
+                                                 "签到": ["打卡"]}}
+    cfg2 = Config(data)
+    # 别名 + @ 参数
+    cmd = parse(n("购买@李四"), cfg2)
+    assert (cmd.name, cmd.target) == ("purchase_slave", "李四")
+    cmd = parse(n("买下@李四"), cfg2)
+    assert cmd.target == "李四"
+    # 整句别名
+    assert parse(n("打卡"), cfg2).name == "sign_in"
+    # canonical 关键字不受子串别名影响（最长优先）
+    cmd = parse(n("购买奴隶@李四"), cfg2)
+    assert cmd.target == "李四"
+    # @ 前缀形式同样生效
+    cmd = parse(n("@李四买下"), cfg2, _matcher(["李四"]))
+    assert (cmd.name, cmd.target, cmd.mention) == ("purchase_slave", "李四", "李四")
+
+
+def test_command_alias_conflict_with_canonical_ignored(cfg):
+    from game.config import Config
+    data = {**cfg.as_dict(), "command_aliases": {"签到": ["我的金币"]}}
+    cfg2 = Config(data)
+    # 别名与已有指令关键字冲突 → 忽略，"我的金币" 仍是原指令
+    assert parse(n("我的金币"), cfg2).name == "my_coins"
+    assert parse(n("签到"), cfg2).name == "sign_in"

@@ -57,11 +57,12 @@ def cfg():
     # 拍一拍用例使用固定昵称，避免随生产配置里的 bot_name 漂移
     data["bot_name"] = "童声微蔓"
     data["bot_name_aliases"] = ["童声徽蔓"]
+    # 聊天收入默认关闭，避免影响既有用例的金额预期；专用用例见 env_chat
+    data["chat_coins_per_message"] = 0
     return Config(data)
 
 
-@pytest.fixture()
-def env(tmp_path, cfg):
+def _build_env(cfg, tmp_path):
     store = Store(tmp_path / "test.db")
     clock = FakeClock()
     rng = Rng()
@@ -90,5 +91,19 @@ def env(tmp_path, cfg):
     ns.engine = engine
     ns.send = send
     ns.group = "888种田大队"
+    return ns
+
+
+@pytest.fixture()
+def env(tmp_path, cfg):
+    yield _build_env(cfg, tmp_path)
+
+
+@pytest.fixture()
+def env_chat(tmp_path, cfg):
+    """聊天收入开启（每条 +10，每日上限 500）的独立环境。"""
+    from game.config import Config
+    data = cfg.as_dict()
+    data["chat_coins_per_message"] = 10
+    ns = _build_env(Config(data), tmp_path)
     yield ns
-    store.close()

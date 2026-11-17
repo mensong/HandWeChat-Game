@@ -58,6 +58,7 @@ class Command:
     amount: Optional[int] = None
     gift: Optional[str] = None
     count: Optional[int] = None
+    mention: Optional[str] = None
 
 
 @dataclass

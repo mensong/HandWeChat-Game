@@ -337,6 +337,7 @@ const META = [
     ["command_rate_limit_seconds", "单用户指令间隔（秒）", "num", ""],
     ["help_cooldown_seconds", "帮助指令冷却（秒）", "num", "四个 ×系统 指令"],
     ["usage_hint_cooldown_seconds", "用法提示冷却（秒）", "num", ""],
+    ["command_aliases", "指令别名", "json", '如 {"购买奴隶":["购买","买下"]}'],
     ["reply_max_chars", "单条回复上限（字符）", "num", "超长自动拆条"],
   ]},
   {group: "拍一拍", items: [
@@ -361,6 +362,8 @@ const META = [
     ["signin_base_reward", "签到基础奖励", "num", ""],
     ["signin_streak_step", "连签每日加成", "num", ""],
     ["signin_max_reward", "签到奖励上限", "num", ""],
+    ["chat_coins_per_message", "每条消息金币奖励", "num", "0=关闭聊天收入"],
+    ["chat_coins_daily_cap", "聊天收入每日上限", "num", "0=不设上限"],
     ["transfer_tax_rate", "转账手续费率（0~1）", "num", "向上取整"],
     ["transfer_daily_limit", "每日转账转出上限（金币）", "num", ""],
   ]},

@@ -101,9 +101,10 @@ def work(ctx, group: str, sender: str) -> str:
     return replies.work_report(sender, lines, total, balance)
 
 
-def my_slaves(ctx, group: str, sender: str) -> str:
-    slaves = [p.name for p in ctx.store.slaves(group, sender)]
-    return replies.slave_list(sender, slaves, ctx.cfg.get("max_slaves"))
+def my_slaves(ctx, group: str, sender: str, subject: str | None = None) -> str:
+    name = subject or sender
+    slaves = [p.name for p in ctx.store.slaves(group, name)]
+    return replies.slave_list(name, slaves, ctx.cfg.get("max_slaves"))
 
 
 def _render_interaction(text: str, master: str, slave: str) -> str:

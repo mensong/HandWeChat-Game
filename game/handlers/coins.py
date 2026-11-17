@@ -8,12 +8,13 @@ from .. import replies
 from ..util import fmt_iso
 
 
-def my_coins(ctx, group: str, sender: str) -> str:
-    player = ctx.store.get_player(group, sender)
+def my_coins(ctx, group: str, sender: str, subject: str | None = None) -> str:
+    name = subject or sender
+    player = ctx.store.get_player(group, name)
     rank = None
-    if not player.is_phantom:
+    if player is not None and not player.is_phantom:
         rank = ctx.store.coin_rank_position(group, player.coins)
-    return replies.my_coins(sender, player.coins, rank)
+    return replies.my_coins(name, player.coins if player else 0, rank)
 
 
 def sign_in(ctx, group: str, sender: str) -> str:
