@@ -12,7 +12,7 @@ def my_coins(ctx, group: str, sender: str, subject: str | None = None) -> str:
     name = subject or sender
     player = ctx.store.get_player(group, name)
     rank = None
-    if player is not None and not player.is_phantom:
+    if player is not None and not player.is_phantom and player.last_signin_date:
         rank = ctx.store.coin_rank_position(group, player.coins)
     return replies.my_coins(name, player.coins if player else 0, rank)
 

@@ -32,7 +32,7 @@ def my_charm(ctx, group: str, sender: str, subject: str | None = None) -> str:
         return replies.my_charm(name, ctx.cfg.get("charm_base"), None, 0)
     charm, _anchor = effective_charm(ctx, group, player)
     rank = None
-    if not player.is_phantom:
+    if not player.is_phantom and player.last_signin_date:
         rank = ctx.store.charm_rank_position(group, charm)
     return replies.my_charm(name, charm, rank, player.total_charm_gained)
 

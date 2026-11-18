@@ -419,7 +419,8 @@ class Store:
     def coin_rank(self, group: str, limit: int) -> list[tuple[str, int]]:
         with self._lock:
             rows = self._conn.execute(
-                """SELECT name, coins FROM players WHERE group_key=? AND is_phantom=0
+                """SELECT name, coins FROM players
+                   WHERE group_key=? AND is_phantom=0 AND last_signin_date IS NOT NULL
                    ORDER BY coins DESC, name ASC LIMIT ?""",
                 (group, limit),
             ).fetchall()
@@ -429,7 +430,8 @@ class Store:
         with self._lock:
             row = self._conn.execute(
                 """SELECT COUNT(*) AS c FROM players
-                   WHERE group_key=? AND is_phantom=0 AND coins > ?""",
+                   WHERE group_key=? AND is_phantom=0 AND last_signin_date IS NOT NULL
+                     AND coins > ?""",
                 (group, coins),
             ).fetchone()
         return row["c"] + 1
@@ -437,7 +439,8 @@ class Store:
     def charm_rank(self, group: str, limit: int) -> list[tuple[str, float]]:
         with self._lock:
             rows = self._conn.execute(
-                """SELECT name, charm FROM players WHERE group_key=? AND is_phantom=0
+                """SELECT name, charm FROM players
+                   WHERE group_key=? AND is_phantom=0 AND last_signin_date IS NOT NULL
                    ORDER BY charm DESC, name ASC LIMIT ?""",
                 (group, limit),
             ).fetchall()
@@ -447,7 +450,8 @@ class Store:
         with self._lock:
             row = self._conn.execute(
                 """SELECT COUNT(*) AS c FROM players
-                   WHERE group_key=? AND is_phantom=0 AND charm > ?""",
+                   WHERE group_key=? AND is_phantom=0 AND last_signin_date IS NOT NULL
+                     AND charm > ?""",
                 (group, charm),
             ).fetchone()
         return row["c"] + 1

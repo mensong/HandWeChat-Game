@@ -16,9 +16,11 @@ def charm(env, name):
 def test_my_coins_registers_player(env):
     reply = env.send("张三", "我的金币")
     assert "当前金币 200" in reply
-    assert "第 1 名" in reply
+    assert "未上榜" in reply  # 未签到不上榜
     p = env.store.get_player(env.group, "张三")
     assert p.coins == 200 and p.is_phantom == 0
+    env.send("张三", "签到")
+    assert "群内第 1 名" in env.send("张三", "我的金币")
 
 
 def test_signin_flow(env):
@@ -67,7 +69,22 @@ def test_coin_rank(env):
     assert "金币榜 TOP10" in reply
     assert "1. 张三 210" in reply
     assert "2. 李四 210" in reply
-    assert "3. 王五 200" in reply
+    assert "王五" not in reply  # 未签到不进榜
+
+
+def test_coin_rank_only_signed_in_players(env):
+    env.send("张三", "我的金币")  # 注册但从未签到
+    env.store.adjust_coins(env.group, "张三", 500, "test", None, env.clock.t.isoformat())
+    env.send("李四", "签到")
+    reply = env.send("李四", "金币榜")
+    assert "1. 李四 210" in reply
+    assert "张三" not in reply
+    assert "未上榜" in env.send("张三", "我的金币")
+    env.clock.advance(days=30)
+    env.send("张三", "签到")  # 隔很久才签到，同样算签到过
+    reply = env.send("李四", "金币榜")
+    assert "1. 张三 710" in reply
+    assert "2. 李四 210" in reply
 
 
 # ---------- 奴隶系统 ----------
@@ -538,10 +555,21 @@ def test_gift_creates_phantom(env):
 
 def test_my_charm_and_rank(env):
     env.send("张三", "送礼@李四 玫瑰 3")
+    env.send("李四", "签到")
     reply = env.send("李四", "我的魅力")
     assert "当前魅力值 13.0" in reply
     assert "累计收到礼物魅力 +3.0" in reply
     assert "群内第 1 名" in reply
+
+
+def test_charm_rank_only_signed_in_players(env):
+    env.send("张三", "送礼@李四 玫瑰 3")
+    reply = env.send("王五", "魅力榜")
+    assert "魅力榜暂无数据" in reply
+    env.send("李四", "签到")
+    reply = env.send("王五", "魅力榜")
+    assert "1. 李四 13.0" in reply
+    assert "张三" not in reply
 
 
 def test_charm_decay(env):
