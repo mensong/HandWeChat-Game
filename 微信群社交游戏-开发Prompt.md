@@ -1,8 +1,8 @@
 # 微信群社交游戏开发 Prompt
 ## 「奴隶系统 × 魅力系统 × 礼物系统 × 金币系统」
 
-> 版本：v1.0（2026-11-14）
-> 依赖：`接口方案.md` 中定义的 HandWeChat HTTP API
+> 版本：v1.1（2026-11-17）
+> 依赖：HandWeChat 消息网关（协议见《网关应用接入指南.md》）与 `handwechat-gateway-sdk`
 > 用途：把本文完整交给编码 AI / 工程师，作为实现该游戏服务的唯一需求规格。
 > 编码要求：先按本文实现，不要自行增加未定义的玩法；所有可调参数放入配置文件。
 
@@ -12,10 +12,10 @@
 
 你是一名资深 Python 后端工程师。请实现一个独立运行的「微信群社交游戏服务」：
 
-1. 它不直接操作微信，只通过 `接口方案.md` 中的 HTTP API 读取当前聊天消息、发送纯文本回复。
+1. 它不直接操作微信，也不访问 HandWeChat API，只通过消息网关的 WebSocket 接收消息询问、回传回复。
 2. 它维护一套持久化的游戏状态（玩家、金币、魅力、奴隶关系、礼物记录、冷却与流水）。
 3. 它只响应用户明确发送的游戏指令；群里的普通聊天消息一律静默忽略。
-4. 它必须能够在 OCR 识别存在噪声、消息重复、微信重启、API 重启的情况下稳定运行。
+4. 它必须能够在 OCR 识别存在噪声、消息重复、微信离线、网关重启的情况下稳定运行。
 
 交付物：
 
@@ -29,21 +29,24 @@
 
 # 二、外部接口能力与硬约束
 
-## 2.1 可用的 HandWeChat API
+## 2.1 可用的网关接口
 
-基础地址：`http://127.0.0.1:8000`（可配置）。
+网关默认地址：`ws://127.0.0.1:8100/api/v1/gateway/ws/app`（可配置）。应用主动连上网关，
+不暴露端口，也不需要知道 HandWeChat 的地址；完整协议见《网关应用接入指南.md》。
 
-| 方法 | 路径 | 用途 |
+| 方向 | 帧 | 用途 |
 | --- | --- | --- |
-| GET | `/api/v1/health` | 查询微信在线、OCR 监听、当前聊天标题、队列状态 |
-| POST | `/api/v1/attach` | 微信重启后重新附加 |
-| POST | `/api/v1/listener/start` | 启动 OCR 监听 |
-| POST | `/api/v1/listener/stop` | 停止 OCR 监听 |
-| GET | `/api/v1/messages?cursor=0&limit=100&timeout=0` | 拉取当前聊天的新消息 |
-| POST | `/api/v1/send` | 发送纯文本，返回 `task_id` |
-| GET | `/api/v1/send/{task_id}` | 查询发送任务结果 |
+| 应用 → 网关 | `hello` | 连接后第一帧，带 `app_id` / `token` |
+| 网关 → 应用 | `welcome` | 握手成功，带 `pin` 与 `context`（微信在线、OCR 监听、当前聊天标题） |
+| 网关 → 应用 | `offer` | 询问一条新消息，必须在 `deadline_ms` 内回 `decision` |
+| 应用 → 网关 | `decision` | `consume`（消费该消息）/ `skip`（放行给下一个应用） |
+| 网关 → 应用 | `upstream_state` | 上游健康状态变化推送 |
+| 网关 → 应用 | `chat_changed` | 当前聊天标题或类型变化推送 |
+| 应用 → 网关 | `send` | 慢路径主动发送文本，带 `request_id` |
+| 网关 → 应用 | `send_result` | 代发回执，`final=true` 为最终结果 |
+| 网关 → 应用 | `pin_expired` | 置顶会话到期通知 |
 
-消息结构：
+`offer.message` 结构与 HandWeChat 消息一致：
 
 ```json
 {
@@ -51,19 +54,24 @@
   "cursor": 42,
   "sender": "张三",
   "content": "收到",
-  "received_at": "2026-11-13T12:01:02+08:00"
+  "received_at": "2026-11-13T12:01:02+08:00",
+  "is_latest": true,
+  "confidence": 1.0
 }
 ```
 
+应用需要在网关的 `data/gateway_config.json` 登记：`id`（唯一）、`priority`（升序询问）、
+`token`（可选校验）、`timeout_ms`（单次询问超时）。
+
 ## 2.2 必须遵守的硬约束
 
-1. **只处理当前打开的聊天。** API 不具备切换聊天的能力，也不维护聊天列表。
-2. **不读取微信控件树，不使用 UIA。** 只依赖 HTTP API。
+1. **只处理当前打开的聊天。** 上游与网关都不具备切换聊天的能力，也不维护聊天列表。
+2. **不读取微信控件树，不使用 UIA。** 只依赖网关 WebSocket。
 3. **只支持纯文本。** 不处理图片、文件、语音、引用、小程序、表情包。
-4. **发送必须限速。** API 自身限制 20 条/分钟；本服务出站上限设为 15 条/分钟，且两条之间至少间隔 1.5 秒。
-5. **不能假成功。** 发送失败、任务失败、微信离线都要记录日志，不能当作已发送。
+4. **发送必须限速。** 网关代发最终落到 HandWeChat（自身限制 20 条/分钟）；本服务出站上限设为 15 条/分钟，且两条之间至少间隔 1.5 秒。
+5. **不能假成功。** 以 `send_result` 的最终结果为准，发送失败、上游离线都要记录日志，不能当作已发送。
 6. **不做聊天切换、不做群成员枚举、不读取历史消息。**
-7. **不修改 HandWeChat API 服务本身。** 本程序是它的外部调用方。
+7. **不直接访问 HandWeChat API，也不修改网关。** 所有消息收发统一经过网关。
 8. **所有游戏数据落库。** 不允许只放内存，进程重启后金币、魅力、奴隶关系不能丢。
 
 ## 2.3 OCR 噪声的现实约束
@@ -83,15 +91,17 @@
 ```text
 微信客户端
    ↕ 截屏 / OCR / 粘贴发送
-HandWeChat HTTP API
-   ↕ HTTP（本服务的唯一外部依赖）
+HandWeChat API
+   ↕ WS /api/v1/ws/messages、POST /api/v1/send
+消息网关 Gateway
+   ↕ 应用 WebSocket（本服务的唯一外部依赖）
 游戏服务（本程序）
-   ├─ 消息轮询器 Poller
+   ├─ 网关客户端 GatewayApp（握手 / offer / decision / 发送回执）
    ├─ 命令解析器 Parser
    ├─ 指令分发器 Dispatcher
    ├─ 领域处理器 Handlers（金币 / 魅力 / 礼物 / 奴隶）
    ├─ 持久化 Store（SQLite）
-   └─ 回复发送器 Sender（队列 + 限速 + 任务校验）
+   └─ 回复发送器 Sender（队列 + 限速 + 拆条）
 ```
 
 建议目录：
@@ -99,16 +109,16 @@ HandWeChat HTTP API
 ```text
 game/
   __init__.py
-  main.py               # 启动、轮询循环、优雅退出
+  main.py               # 启动、网关任务、优雅退出
   config.py             # 配置加载与校验
-  wechat_client.py      # 封装 HandWeChat API
+  gateway_app.py        # 网关接入：offer/decision、上游状态、发送回执
   parser.py             # 消息规范化与命令解析
   dispatcher.py         # 指令路由
   store.py              # SQLite 访问、事务、建表
   models.py             # 数据类
   rng.py                # 可注入的随机源（便于测试）
   replies.py            # 所有回复模板
-  send_queue.py         # 出站队列与限速
+  send_queue.py         # 出站队列、限速与拆条
   handlers/
     coins.py
     charm.py
@@ -117,7 +127,8 @@ game/
   tests/
 ```
 
-进程模型：单进程 `asyncio`。消息按到达顺序串行处理；数据库写入串行；发送由独立协程消费队列。
+进程模型：单进程 `asyncio`。网关逐条串行询问，本服务按 offer 顺序串行处理；数据库写入串行；
+发送由独立协程消费队列。
 
 ---
 
@@ -256,9 +267,10 @@ game/
 
 ## 4.9 群识别与数据隔离
 
-API 只返回当前聊天标题，没有稳定的群 ID。为支持多群并防止串数据：
+上游只提供当前聊天标题，没有稳定的群 ID。为支持多群并防止串数据：
 
-1. 每次轮询同时读取 `/api/v1/health` 的 `chat_title`。
+1. 群标题来自网关：连接时读 `welcome.context.chat_title`，运行期由 `upstream_state` /
+   `chat_changed` 推送更新；本服务不访问 HandWeChat API。
 2. 规范化群标题：
    - 去掉首尾空白；
    - 去掉尾部成员数，如 `(32)`、`（32）`、`(32人)`；
@@ -271,37 +283,33 @@ API 只返回当前聊天标题，没有稳定的群 ID。为支持多群并防�
    - 非空时，只有 `group_key` 在列表中的群才处理指令，否则暂停并记录一次告警。
 7. `chat_title` 为空时沿用上一次的 `group_key`；从未识别到标题时，暂停处理并记录日志。
 
-## 4.10 启动、恢复与游标
+## 4.10 启动、断线恢复与会话状态
 
-1. 服务启动后读取配置、初始化数据库。
-2. 调用 `/api/v1/health`：
-   - 若微信不在线（`online=false`），记录错误并每 10 秒重试。
-   - `listener_running` 仅用于状态展示，OCR 监听的启动/重启由使用端负责，本服务不调用 `/api/v1/listener/start`。
-3. **丢弃积压消息。** 启动时用 `cursor=0&limit=100` 循环拉取直到 `has_more=false`，把本地 `cursor` 设为最后的 `next_cursor`，不处理这些历史消息。原因：避免服务重启后重放购买、送礼等扣费指令。
-4. 正常运行使用长轮询：`GET /api/v1/messages?cursor={local}&limit=100&timeout=25`。
-5. **API 重启检测：** 如果响应中的 `next_cursor` 小于本地 `cursor`，说明 API 进程重启、游标已重置。此时：
-   - 记 `API_CURSOR_RESET` 日志；
-   - 把本地 `cursor` 设为响应中的 `next_cursor`；
-   - 丢弃本批消息（视为积压），继续轮询。
-6. API 错误处理：
-   - `WECHAT_OFFLINE` / `ATTACH_FAILED`：指数退避（1s、2s、5s、10s、30s 封顶）重连，微信窗口的重新附加由使用端负责，本服务不调用 `/api/v1/attach`。
-   - `OCR_CHANNEL_NOT_RUNNING`：指数退避重连，等待使用端恢复监听，本服务不调用 `/api/v1/listener/start`。
-   - HTTP 5xx / 连接失败：指数退避，不丢业务数据。
-   - `INVALID_REQUEST`：记录请求参数，不重试。
+1. 服务启动后读取配置、初始化数据库，连接网关并发送 `hello`。
+2. 网关返回 `welcome`：用 `welcome.context` 初始化微信在线、OCR 监听和当前聊天标题；
+   `welcome.pin` 只用于恢复置顶会话（本游戏是单轮指令，不使用置顶）。
+3. 网关只推送连接建立之后的实时消息，连接前的历史消息不会补发；服务重启不会重放扣费指令。
+4. 运行期逐条接收 `offer`，在 `deadline_ms` 内返回 `decision`：命中指令回 `consume`，
+   否则回 `skip` 放行给下一个应用。只处理 `is_latest=true` 的消息。
+5. 上游状态变化通过 `upstream_state`、`chat_changed` 推送；`online` / `listener_running`
+   仅用于状态展示，OCR 监听的启动与重连由使用端负责，本服务不调用 `/api/v1/listener/*`。
+6. 网关断线由 SDK 自动重连（默认 3 秒）；不可恢复的关闭码（4009/4400/4401/4404）
+   记录日志后停止重连，修好网关配置后重启本服务。
+7. 网关重启后 `dispatch_id` 会重新分配，不作为长期幂等键；消息仍按 `id` 与内容去重。
 
 ## 4.11 回复发送
 
 1. 每个指令产生一个回复文本；多行用 `\n` 连接。
-2. 回复进入发送队列，由单独的发送协程按顺序消费。
-3. 发送流程：
-   - `POST /api/v1/send`，拿到 `task_id`；
-   - 每秒轮询 `GET /api/v1/send/{task_id}`，最多 30 秒；
-   - `success`：完成；
-   - `failed` 且 `error_code=SEND_FAILED`：5 秒后重试一次；
-   - `failed` 且 `error_code=SEND_VERIFY_FAILED`：只记录日志，**不重试**，避免重复发送。
+2. 回复进入发送队列，由单独的发送协程按顺序消费，并受出站限速约束。
+3. 发送流程（慢路径，避免拖住后续询问）：
+   - 命中指令时先回 `decision: consume`（不带 `reply`），立即结束本次询问；
+   - 回复文本按队列顺序通过 `send` 帧发出，每帧带递增的 `request_id` 和来源 `dispatch_id`；
+   - 网关回 `send_result`：`final=false` 表示已入队，`final=true` 的 `ok/status/error_code`
+     是最终结果；
+   - 最终失败只记录日志与动作事件，**不自动重试**，避免重复发送。
 4. 回复长度上限 `reply_max_chars`（默认 500 字符）：
    - 超过上限时按行拆分，每段加 `(1/2)`、`(2/2)` 前缀；
-   - 单行仍然超长时截断并加 `…`。
+   - 单行仍然超长时按字符切分。
 5. 发送队列上限 100 条；队列满时记录 `SEND_QUEUE_FULL` 并丢弃该回复（业务数据不回滚）。
 6. 所有出站文本必须是纯文本，不使用 Markdown、HTML、表情图片。
 
@@ -429,12 +437,10 @@ CREATE TABLE IF NOT EXISTS daily_counters (
 
 ```json
 {
-  "api_base_url": "http://127.0.0.1:8000",
-  "api_timeout_seconds": 30,
-  "poll_timeout_seconds": 25,
-  "poll_limit": 100,
-  "health_poll_seconds": 2,
   "timezone": "Asia/Shanghai",
+  "gateway_url": "ws://127.0.0.1:8100/api/v1/gateway/ws/app",
+  "gateway_app_id": "social-game",
+  "gateway_token": "",
 
   "allow_hash_prefix": true,
   "ignore_senders": ["我", "对方", "未知", ""],
@@ -447,7 +453,6 @@ CREATE TABLE IF NOT EXISTS daily_counters (
   "send_max_per_minute": 15,
   "send_min_interval_ms": 1500,
   "send_queue_max": 100,
-  "send_task_timeout_seconds": 30,
 
   "allowed_groups": [],
   "group_title_stable_seconds": 10,
@@ -1296,8 +1301,8 @@ success = slave_score >= master_score
 - 进程崩溃后重启，金币、魅力、奴隶关系、礼物记录、流水不丢。
 - 消息处理幂等：同一条消息不会重复扣费。
 - 发送失败不回滚业务数据。
-- 微信离线、OCR 停止、API 重启都能自动恢复。
-- 优雅退出：停止轮询、等待发送队列清空（最多 10 秒）。
+- 微信离线、OCR 停止、网关重启都能自动恢复；不可恢复的认证错误需人工修正配置后重启。
+- 优雅退出：断开网关、等待发送队列清空（最多 10 秒）。
 
 ## 12.2 日志
 
@@ -1309,7 +1314,7 @@ success = slave_score >= master_score
   ```
 - 错误日志包含堆栈。
 - 不记录与游戏无关的聊天内容。
-- 发送任务失败记录 `task_id`、`error_code`、`error_message`。
+- 发送最终失败记录 `request_id`、`dispatch_id`、`status`、`error_code`。
 
 ## 12.3 监控
 
@@ -1318,26 +1323,38 @@ success = slave_score >= master_score
 ```json
 {
   "status": "ok",
-  "api_online": true,
+  "online": true,
   "listener_running": true,
   "chat_title": "888 种田大队(32)",
   "group_key": "888 种田大队",
   "cursor": 1234,
   "queue_size": 0,
   "processed_total": 567,
-  "last_error": null
+  "last_error": null,
+  "gateway": {
+    "app_id": "social-game",
+    "connected": true,
+    "offers": 120,
+    "consumes": 96,
+    "skips": 24,
+    "sends_ok": 96,
+    "sends_failed": 0,
+    "context": {"online": true, "listener_running": true,
+                "chat_title": "888 种田大队(32)", "chat_type": "group",
+                "health_ok": true, "upstream_connected": true}
+  }
 }
 ```
 
 ## 12.4 部署
 
-- Windows 10/11，与微信、HandWeChat API 同机运行。
+- Windows 10/11，与微信、HandWeChat、消息网关同机或网络可达。
 - 通过命令行或 NSSM 注册为服务。
 - 配置文件路径通过命令行参数指定：
   ```bash
   python -m game.main --config config/game_config.json
   ```
-- 依赖尽量少：`httpx`、`aiosqlite`（或标准库 `sqlite3` + 线程池）、`pydantic`（可选）。
+- 依赖尽量少：`websockets`、`handwechat-gateway-sdk`，标准库 `sqlite3`。
 - 不引入 Redis、MySQL、消息队列等外部组件。
 
 ## 12.5 测试
@@ -1347,7 +1364,8 @@ success = slave_score >= master_score
 1. **解析器单测**：正常指令、全角字符、多余空格、尾部标点、错误格式、非指令消息。
 2. **公式单测**：购买价格、释放奖励、魅力衰减、签到奖励、反抗判定、打工事件权重。
 3. **处理器单测**：使用内存 SQLite + 可注入随机源，覆盖成功、余额不足、冷却、上限、无效目标。
-4. **集成测试**：用假 HTTP 服务模拟 HandWeChat API，验证轮询、去重、发送、游标重置。
+4. **集成测试**：用假网关（WebSocket）模拟 `welcome` / `offer` / `send_result` / `upstream_state`，
+   验证决策、去重、发送回执与群标题切换。
 5. **回归测试**：覆盖第十三章全部验收用例。
 
 随机源必须可注入，测试中使用固定序列，禁止依赖真实随机。
@@ -1387,9 +1405,10 @@ success = slave_score >= master_score
 | 25 | OCR 重复 | 同一 sender+content 5 秒内出现两次 | 只处理一次 |
 | 26 | 自己发送 | sender=`我` | 忽略 |
 | 27 | 无法识别昵称 | sender=`对方` | 忽略 |
-| 28 | API 游标重置 | 本地 cursor=500，API 返回 next_cursor=10 | 重置本地游标，丢弃该批消息，继续轮询 |
+| 28 | 非最新消息 | 网关推送 `is_latest=false` 的 offer | 返回 skip，不处理，不回复 |
 | 29 | 多群隔离 | 切换到另一个群，同名玩家 | 两个群的金币、奴隶关系互不影响 |
-| 30 | 发送失败 | `/send` 返回 `SEND_VERIFY_FAILED` | 记日志，不重试，业务数据保持 |
+| 30 | 发送失败 | `send_result` 最终 `ok=false` | 记日志与事件，不重试，业务数据保持 |
+| 31 | 网关认证失败 | 关闭码 4401（token 不匹配） | 记录 `gateway_auth_error`，停止重连，控制台可见 |
 
 ---
 
@@ -1405,7 +1424,7 @@ success = slave_score >= master_score
 6. 不做多进程、多实例部署。
 7. 不做账号体系、登录、权限。
 8. 不做外部数据库、缓存、消息队列。
-9. 不修改 HandWeChat API 服务。
+9. 不直接访问 HandWeChat API、不修改网关，所有收发统一经过网关。
 10. 不自行增加未在本文定义的玩法（例如抢劫、赌场、结婚、宠物等）。
 
 ---
@@ -1439,5 +1458,6 @@ success = slave_score >= master_score
 | 21 | 指令速率 | 单用户 2 秒一条；出站 15 条/分钟 |
 | 22 | 回复长度 | 500 字符，超出拆条 |
 | 23 | 服务端口 | 游戏服务自身健康检查 8001 |
+| 24 | 网关应用 | `id=social-game`，`priority=100`，`timeout_ms=1500`，token 与网关配置一致 |
 
 如果以上默认值都确认，请直接说“开始写代码”；我会按这份 Prompt 实现，并在实现完成后给出启动方式、配置说明和测试结果。

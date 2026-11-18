@@ -54,6 +54,7 @@ class Engine:
         self.dispatcher = Dispatcher(self.ctx)
         self.tracker = GroupTracker(cfg)
         self._sender = None
+        self._gateway = None
         self._seen_ids: set[str] = set()
         self._seen_order: deque[str] = deque()
         self._content_seen: dict[tuple[str, str, str], float] = {}
@@ -67,21 +68,25 @@ class Engine:
         self.cursor = 0  # 最后一条已接收消息的 id，不是流位置
         self.processed_total = 0
         self.last_error: str | None = None
-        self.api_online: bool | None = None
+        self.online: bool | None = None
         self.listener_running: bool | None = None
         self.recent_events: deque = deque(maxlen=500)
-        self.last_api_health: dict | None = None
+        self.last_upstream_context: dict | None = None
 
     def attach_sender(self, sender) -> None:
         self._sender = sender
+
+    def attach_gateway(self, gateway) -> None:
+        self._gateway = gateway
 
     def set_cursor(self, cursor: int) -> None:
         self.cursor = cursor
 
     def handle_health(self, health: dict) -> None:
+        """接收网关透传的上游状态快照（微信在线、OCR 监听、当前聊天标题）。"""
         now = self.clock()
-        self.last_api_health = dict(health)
-        self.api_online = bool(health.get("online"))
+        self.last_upstream_context = dict(health)
+        self.online = bool(health.get("online"))
         self.listener_running = bool(health.get("listener_running"))
         key = self.tracker.update(health.get("chat_title"), now)
         allowed = self.cfg.get("allowed_groups")
@@ -268,12 +273,13 @@ class Engine:
     def stats(self) -> dict:
         return {
             "status": "ok",
-            "api_online": self.api_online,
+            "online": self.online,
             "listener_running": self.listener_running,
             "chat_title": self.tracker.title,
             "group_key": self.tracker.key,
             "cursor": self.cursor,
             "queue_size": self._sender.size if self._sender else 0,
+            "gateway": self._gateway.status() if self._gateway is not None else None,
             "processed_total": self.processed_total,
             "last_error": self.last_error,
         }

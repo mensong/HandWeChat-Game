@@ -51,7 +51,7 @@ def test_console_end_to_end(env, tmp_path):
         env.send("张三", "签到")
         status = json.loads(urllib.request.urlopen(base + "/api/status").read())
         assert status["game"]["group_key"] == env.group
-        assert status["wechat"]["online"] is True
+        assert status["upstream"]["online"] is True
         assert "cfg.json" in status["cfg_path"]
 
         players = json.loads(urllib.request.urlopen(
@@ -153,9 +153,10 @@ def test_hot_reload_callback(env, tmp_path):
         assert env.engine.cfg.get("initial_coins") == 555
         assert env.engine.ctx.cfg.get("max_slaves") == 9
 
-        data2 = {**old, "initial_coins": 555, "api_base_url": "http://1.2.3.4:8000"}
+        data2 = {**old, "initial_coins": 555,
+                 "gateway_url": "ws://10.0.0.1:8100/api/v1/gateway/ws/app"}
         info2 = cb(data2)
-        assert info2["restart_required"] == ["api_base_url"]
+        assert info2["restart_required"] == ["gateway_url"]
 
         with pytest.raises(Exception):
             cb({**old, "gifts": []})  # 非法配置 → 校验失败

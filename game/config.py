@@ -6,10 +6,11 @@ import re
 from pathlib import Path
 
 DEFAULTS = {
-    "api_base_url": "http://127.0.0.1:8000",
-    "api_timeout_seconds": 30,
-    "health_poll_seconds": 2,
     "timezone": "Asia/Shanghai",
+
+    "gateway_url": "ws://127.0.0.1:8100/api/v1/gateway/ws/app",
+    "gateway_app_id": "social-game",
+    "gateway_token": "",
 
     "allow_hash_prefix": True,
     "ignore_senders": ["我", "对方", "未知", ""],
@@ -28,7 +29,6 @@ DEFAULTS = {
     "send_max_per_minute": 15,
     "send_min_interval_ms": 1500,
     "send_queue_max": 100,
-    "send_task_timeout_seconds": 30,
 
     "allowed_groups": [],
     "group_title_stable_seconds": 10,
@@ -95,7 +95,7 @@ DEFAULTS = {
 }
 
 _INT_KEYS = [
-    "reply_max_chars", "send_queue_max", "send_task_timeout_seconds",
+    "reply_max_chars", "send_queue_max",
     "initial_coins", "min_slave_price", "max_slaves",
     "slave_work_max_per_day", "rebel_max_per_day", "rebel_loot_max",
     "rebel_ransom_max", "rebel_compensation_max",
@@ -124,7 +124,8 @@ class ConfigError(Exception):
 
 
 # 这些参数涉及启动时建立的连接/绑定/时钟，热加载无法生效，改动后需重启
-RESTART_KEYS = {"api_base_url", "web_host", "health_port", "timezone"}
+RESTART_KEYS = {"gateway_url", "gateway_app_id", "gateway_token",
+                "web_host", "health_port", "timezone"}
 
 
 INTERACTION_TONES = ("褒", "贬", "中性")
@@ -186,6 +187,13 @@ class Config:
                 raise ConfigError(f"{k} must be > 0")
         if d["send_max_per_minute"] > 20:
             raise ConfigError("send_max_per_minute must be <= 20")
+        if not isinstance(d["gateway_url"], str) \
+                or not d["gateway_url"].startswith(("ws://", "wss://")):
+            raise ConfigError("gateway_url must start with ws:// or wss://")
+        if not isinstance(d["gateway_app_id"], str) or not d["gateway_app_id"].strip():
+            raise ConfigError("gateway_app_id must be a non-empty string")
+        if not isinstance(d["gateway_token"], str):
+            raise ConfigError("gateway_token must be a string")
         if d["slave_price_random_min"] < 0 or d["slave_price_random_max"] < d["slave_price_random_min"]:
             raise ConfigError("invalid slave_price_random range")
         if not 0 <= d["charm_decay_rate"] < 1:

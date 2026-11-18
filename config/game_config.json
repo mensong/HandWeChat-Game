@@ -1,8 +1,8 @@
 {
-  "api_base_url": "http://10.34.149.37:8000",
-  "api_timeout_seconds": 30,
-  "health_poll_seconds": 2,
   "timezone": "Asia/Shanghai",
+  "gateway_url": "ws://10.34.149.37:8100/api/v1/gateway/ws/app",
+  "gateway_app_id": "social-game",
+  "gateway_token": "123456",
   "allow_hash_prefix": true,
   "ignore_senders": [
     "我",
@@ -24,7 +24,6 @@
   "send_max_per_minute": 15,
   "send_min_interval_ms": 1500,
   "send_queue_max": 100,
-  "send_task_timeout_seconds": 30,
   "allowed_groups": [],
   "group_title_stable_seconds": 10,
   "initial_coins": 1000,

@@ -11,15 +11,13 @@ from pathlib import Path
 from .config import Config, load_config
 from .console import build_console_server, make_reload_callback
 from .engine import Engine
+from .gateway_app import GatewayApp, GatewaySender
 from .rng import Rng
 from .send_queue import SendQueue
 from .store import Store
 from .util import make_clock
-from .wechat_client import ApiError, WechatClient
 
 log = logging.getLogger("game")
-
-BACKOFF_STEPS = [1, 2, 5, 10, 30]
 
 
 def setup_logging(log_dir: Path) -> None:
@@ -35,106 +33,34 @@ def setup_logging(log_dir: Path) -> None:
     log.addHandler(console)
 
 
-async def bootstrap(client: WechatClient, engine: Engine) -> None:
-    """等待微信在线；OCR 监听由使用端负责，本服务不主动启动。连接前已产生的消息不回补。"""
-    while True:
-        try:
-            h = await client.health()
-        except ApiError as e:
-            log.error("health check failed: %s", e)
-            await asyncio.sleep(10)
-            continue
-        engine.handle_health(h)
-        if not h.get("online"):
-            log.warning("wechat offline, retry in 10s")
-            await asyncio.sleep(10)
-            continue
-        break
-    log.info("wechat online, listener_running=%s, waiting for websocket messages",
-             bool(h.get("listener_running")))
-
-
-async def ws_loop(client: WechatClient, engine: Engine) -> None:
-    backoff_idx = 0
-    # 断线重连期间同一条错误会每轮复现，只记首次；收到 ready 视为恢复并重置。
-    last_evt: tuple[str, str] | None = None
-
-    def record(kind: str, message: str = "") -> None:
-        nonlocal last_evt
-        if (kind, message) == last_evt:
-            return
-        last_evt = (kind, message)
-        engine.add_event(kind=kind, **({"message": message} if message else {}))
-
-    while True:
-        try:
-            async for frame in client.stream_frames():
-                if frame.get("type") == "ready":
-                    backoff_idx = 0
-                    last_evt = None
-                    log.info("websocket ready: buffer_size=%s", frame.get("buffer_size"))
-                    continue
-                items = frame.get("items", [])
-                # 每批只认 is_latest 的那条；整帧没有该字段说明 API 尚未升级，整帧丢弃。
-                latest = [it for it in items if it.get("is_latest") is True]
-                if items and not latest:
-                    log.warning("frame dropped, no is_latest flag: %d items", len(items))
-                for item in latest:
-                    engine.handle_message(item)
-                if items and items[-1].get("cursor") is not None:
-                    engine.set_cursor(int(items[-1]["cursor"]))
-            log.warning("websocket closed by server")
-            record("ws_closed")
-        except ApiError as e:
-            engine.last_error = f"ws: {e.code}"
-            record("ws_error", str(e))
-            log.warning("websocket error: %s", e)
-        except Exception as e:
-            engine.last_error = "ws: unexpected"
-            record("ws_error", type(e).__name__)
-            log.exception("websocket unexpected error")
-        await asyncio.sleep(BACKOFF_STEPS[backoff_idx])
-        backoff_idx = min(backoff_idx + 1, len(BACKOFF_STEPS) - 1)
-
-
-async def health_loop(client: WechatClient, cfg: Config, engine: Engine) -> None:
-    while True:
-        try:
-            h = await client.health()
-            engine.handle_health(h)
-        except ApiError as e:
-            engine.last_error = f"health: {e.code}"
-            log.debug("health poll failed: %s", e)
-        except Exception:
-            log.exception("health poll unexpected error")
-        await asyncio.sleep(cfg.get("health_poll_seconds"))
-
-
 async def async_main(cfg: Config, db_path: str, cfg_path: str) -> None:
     store = Store(db_path)
     clock = make_clock(cfg.get("timezone"))
     rng = Rng()
-    client = WechatClient(cfg.get("api_base_url"), cfg.get("api_timeout_seconds"))
     engine = Engine(cfg, store, clock, rng, log)
-    queue = SendQueue(client, cfg, log, event_sink=engine.add_event)
-    engine.attach_sender(queue)
-    log.info("game service starting, db=%s api=%s", db_path, cfg.get("api_base_url"))
+    gateway = GatewayApp(cfg, engine, log)
+    queue = SendQueue(GatewaySender(gateway.client), cfg, log,
+                      event_sink=engine.add_event)
+    gateway.attach_queue(queue)
+    engine.attach_sender(gateway.collector)
+    engine.attach_gateway(gateway)
+    log.info("game service starting, db=%s gateway=%s app_id=%s",
+             db_path, cfg.get("gateway_url"), cfg.get("gateway_app_id"))
 
     loop = asyncio.get_running_loop()
     reload_callback = make_reload_callback(engine, queue, loop, log)
     server = build_console_server(engine, cfg, cfg_path, reload_callback)
     log.info("console listening on http://%s:%d/", cfg.get("web_host"),
              cfg.get("health_port"))
-    await bootstrap(client, engine)
 
     tasks = [
         asyncio.create_task(queue.run(), name="send-worker"),
-        asyncio.create_task(health_loop(client, cfg, engine), name="health-loop"),
-        asyncio.create_task(ws_loop(client, engine), name="ws-loop"),
+        asyncio.create_task(gateway.run(), name="gateway"),
     ]
     try:
         await asyncio.gather(*tasks)
     finally:
+        await gateway.client.stop()
         for t in tasks:
             t.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)

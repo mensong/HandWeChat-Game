@@ -1,11 +1,9 @@
-"""出站发送队列：限速、拆分、任务校验与失败重试。"""
+"""出站发送队列：限速、拆分与失败记录。发送统一走网关。"""
 from __future__ import annotations
 
 import asyncio
 import logging
 from collections import deque
-
-from .wechat_client import ApiError, WechatClient
 
 PREFIX_RESERVE = 10
 
@@ -35,9 +33,10 @@ def split_reply(text: str, max_chars: int) -> list[str]:
 
 
 class SendQueue:
-    def __init__(self, client: WechatClient, cfg, log: logging.Logger,
-                 event_sink=None):
-        self.client = client
+    """sender 只需实现 `async send(text, dispatch_id="")`。"""
+
+    def __init__(self, sender, cfg, log: logging.Logger, event_sink=None):
+        self.sender = sender
         self.cfg = cfg
         self.log = log
         self.event_sink = event_sink
@@ -48,9 +47,9 @@ class SendQueue:
         if self.event_sink is not None:
             self.event_sink(kind=kind, **fields)
 
-    def enqueue(self, text: str) -> bool:
+    def enqueue(self, text: str, dispatch_id: str = "") -> bool:
         try:
-            self.q.put_nowait(text)
+            self.q.put_nowait((text, dispatch_id))
             return True
         except asyncio.QueueFull:
             self.log.warning("SEND_QUEUE_FULL, drop reply (%d chars)", len(text))
@@ -69,16 +68,16 @@ class SendQueue:
 
     async def run(self) -> None:
         while True:
-            text = await self.q.get()
+            text, dispatch_id = await self.q.get()
             try:
                 for part in split_reply(text, self.cfg.get("reply_max_chars")):
-                    await self._send_with_rate_limit(part)
+                    await self._send_with_rate_limit(part, dispatch_id)
             except Exception:
                 self.log.exception("send worker error")
             finally:
                 self.q.task_done()
 
-    async def _send_with_rate_limit(self, text: str) -> None:
+    async def _send_with_rate_limit(self, text: str, dispatch_id: str = "") -> None:
         loop = asyncio.get_running_loop()
         max_per_min = self.cfg.get("send_max_per_minute")
         min_interval = self.cfg.get("send_min_interval_ms") / 1000
@@ -94,45 +93,11 @@ class SendQueue:
                 continue
             break
         self._sent_times.append(loop.time())
-        await self._send_one(text)
+        await self._send_one(text, dispatch_id)
 
-    async def _send_one(self, text: str, retried: bool = False) -> None:
-        loop = asyncio.get_running_loop()
+    async def _send_one(self, text: str, dispatch_id: str = "") -> None:
         try:
-            resp = await self.client.send(text)
-        except ApiError as e:
-            self.log.error("send request failed: %s", e)
-            return
-        task_id = resp.get("task_id")
-        if not task_id:
-            self.log.error("send response missing task_id: %s", resp)
-            return
-        deadline = loop.time() + self.cfg.get("send_task_timeout_seconds")
-        while True:
-            try:
-                task = await self.client.send_task(task_id)
-            except ApiError as e:
-                if e.code == "SEND_TASK_NOT_FOUND":
-                    self.log.warning("send task expired: %s", task_id)
-                    return
-                self.log.warning("send task query failed: %s", e)
-                task = None
-            if task is not None:
-                status = task.get("status")
-                if status == "success":
-                    return
-                if status == "failed":
-                    error_code = task.get("error_code")
-                    self.log.error("send task failed: task_id=%s code=%s msg=%s",
-                                   task_id, error_code, task.get("error_message"))
-                    self._event("send_failed", task_id=task_id, error_code=error_code,
-                                error_message=task.get("error_message"))
-                    if error_code == "SEND_FAILED" and not retried:
-                        await asyncio.sleep(5)
-                        await self._send_one(text, retried=True)
-                    return
-            if loop.time() > deadline:
-                self.log.error("send task timeout: task_id=%s", task_id)
-                self._event("send_timeout", task_id=task_id)
-                return
-            await asyncio.sleep(1)
+            await self.sender.send(text, dispatch_id=dispatch_id)
+        except Exception as e:
+            self.log.error("send failed: %s", e)
+            self._event("send_failed", error=str(e), text_len=len(text))

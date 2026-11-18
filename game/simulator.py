@@ -324,9 +324,9 @@ td button { background: #5a2a2a; color: #ff8a80; border: 1px solid #7a3a3a; bord
 <script>
 const META = [
   {group: "服务与接口", items: [
-    ["api_base_url", "HandWeChat API 地址", "text", ""],
-    ["api_timeout_seconds", "API 超时（秒）", "num", ""],
-    ["health_poll_seconds", "健康检查间隔（秒）", "num", ""],
+    ["gateway_url", "网关地址", "text", "正式服务连接网关使用"],
+    ["gateway_app_id", "网关应用 ID", "text", "需与网关配置 apps[].id 一致"],
+    ["gateway_token", "网关 token", "text", "网关配置 apps[].token；留空表示不校验"],
     ["health_port", "本服务健康检查端口", "num", ""],
     ["timezone", "时区", "text", "本机缺时区数据时按 UTC+8 处理"],
   ]},
@@ -350,7 +350,6 @@ const META = [
     ["send_max_per_minute", "每分钟最多发送（≤20）", "num", ""],
     ["send_min_interval_ms", "两条发送最小间隔（毫秒）", "num", ""],
     ["send_queue_max", "发送队列上限", "num", "满时丢弃回复并记日志"],
-    ["send_task_timeout_seconds", "发送任务等待上限（秒）", "num", ""],
   ]},
   {group: "群识别", items: [
     ["allowed_groups", "允许的群标题（白名单）", "json", "空数组 = 允许所有群"],

@@ -1,4 +1,4 @@
-"""game.main 的 Web 控制台：玩家数据、动作日志、微信服务状态、游戏配置。
+"""game.main 的 Web 控制台：玩家数据、动作日志、运行状态、游戏配置。
 
 挂在健康端口上（默认 8001），`/health` 接口保留；
 页面入口 `http://<host>:8001/`。
@@ -161,7 +161,7 @@ button.ghost { background: #2a313a; color: #d8dde3; border: 1px solid #3a434e;
       </div>
       <p class="hint">保存前会用游戏校验器检查，非法配置不会被写入。
 保存后自动热加载、立即生效（改动会写入动作日志）；
-仅 api_base_url、web_host、health_port、timezone 四项需重启 game.main 生效。</p>
+仅 gateway_url、gateway_app_id、gateway_token、web_host、health_port、timezone 需重启 game.main 生效。</p>
       <div id="form"></div>
     </section>
   </div>
@@ -169,9 +169,9 @@ button.ghost { background: #2a313a; color: #d8dde3; border: 1px solid #3a434e;
 <script>
 const META = [
   {group: "服务与接口", items: [
-    ["api_base_url", "HandWeChat API 地址", "text", ""],
-    ["api_timeout_seconds", "API 超时（秒）", "num", ""],
-    ["health_poll_seconds", "健康检查间隔（秒）", "num", ""],
+    ["gateway_url", "网关地址", "text", ""],
+    ["gateway_app_id", "网关应用 ID", "text", "需与网关配置 apps[].id 一致"],
+    ["gateway_token", "网关 token", "text", "网关配置 apps[].token；留空表示不校验"],
     ["health_port", "控制台/健康检查端口", "num", ""],
     ["web_host", "控制台绑定地址", "text", "0.0.0.0=局域网可访问；127.0.0.1=仅本机"],
     ["timezone", "时区", "text", ""],
@@ -196,7 +196,6 @@ const META = [
     ["send_max_per_minute", "每分钟最多发送（≤20）", "num", ""],
     ["send_min_interval_ms", "两条发送最小间隔（毫秒）", "num", ""],
     ["send_queue_max", "发送队列上限", "num", ""],
-    ["send_task_timeout_seconds", "发送任务等待上限（秒）", "num", ""],
   ]},
   {group: "群识别", items: [
     ["allowed_groups", "允许的群标题（白名单）", "json", "空数组 = 允许所有群"],
@@ -299,19 +298,22 @@ function showTab(tab) {
 async function refreshStatus() {
   try {
     const s = await getJSON("/api/status");
-    const g = s.game, w = s.wechat || {};
+    const g = s.game, u = s.upstream || {}, gw = g.gateway || {}, ctx = gw.context || {};
     const dot = v => `<span class="dot ${v ? "ok" : "bad"}"></span>`;
     document.getElementById("statusbar").innerHTML = `
-      <span>${dot(g.api_online)}微信API在线</span>
+      <span>${dot(gw.connected)}网关</span>
+      <span><span class="k">应用</span>${esc(gw.app_id || "-")}</span>
+      <span><span class="k">offer</span>${gw.offers ?? 0}</span>
+      <span>${dot(g.online)}微信在线</span>
       <span>${dot(g.listener_running)}OCR监听</span>
+      <span>${dot(u.upstream_connected)}上游连接</span>
       <span><span class="k">群</span>${esc(g.group_key || "-")}</span>
       <span><span class="k">最新消息</span>${g.cursor}</span>
       <span><span class="k">队列</span>${g.queue_size}</span>
       <span><span class="k">已处理</span>${g.processed_total}</span>
       <span><span class="k">游戏侧错误</span>${esc(g.last_error || "无")}</span>
-      <span><span class="k">API缓冲</span>${w.message_buffer_size ?? "-"}</span>
-      <span><span class="k">API去重过滤</span>${w.dedup_filtered_count ?? "-"}</span>
-      <span><span class="k">API错误</span>${esc(w.last_error || "无")}</span>`;
+      <span><span class="k">网关错误</span>${esc(gw.last_error || "无")}</span>
+      <span><span class="k">发送失败</span>${gw.sends_failed ?? 0}</span>`;
   } catch (e) { /* 服务未就绪时忽略 */ }
 }
 
@@ -651,7 +653,7 @@ def build_console_handler(engine: Engine, cfg: Config, cfg_path: str,
                 self._json(200, engine.stats())
             elif path == "/api/status":
                 self._json(200, {"game": engine.stats(),
-                                 "wechat": engine.last_api_health,
+                                 "upstream": engine.last_upstream_context,
                                  "cfg_path": str(Path(cfg_path).resolve())})
             elif path == "/api/players":
                 group = query.get("group") or engine.tracker.key

@@ -1,13 +1,14 @@
 # 微信群社交游戏服务
 
-基于 `接口方案.md` 中的 HandWeChat HTTP API 实现的群聊社交游戏，包含
+基于 HandWeChat 消息网关接入微信的群聊社交游戏，包含
 **金币系统、魅力系统、礼物系统、奴隶系统**。完整需求规格见
 `微信群社交游戏-开发Prompt.md`。
 
 ## 运行环境
 
-- Windows 10/11，与微信、HandWeChat API 服务同机运行
-- Python 3.11+，运行时依赖 `websockets`（见 `requirements.txt`），测试需要 pytest
+- Windows 10/11，与微信、HandWeChat、消息网关同机或网络可达
+- Python 3.11+，运行时依赖 `websockets`（见 `requirements.txt`）与
+  `handwechat-gateway-sdk`（`pip install handwechat-gateway-sdk`），测试需要 pytest
 
 ## 启动
 
@@ -17,30 +18,46 @@
 pip install -r requirements.txt
 ```
 
-2. 启动 HandWeChat API 服务（监听 `http://127.0.0.1:8000`）。
-3. 微信登录，并保持目标群聊在当前聊天窗口打开。
-4. 启动游戏服务：
+如果 `handwechat-gateway-sdk` 尚未发布到包索引，改从 HandWeChat 仓库构建 wheel 后安装：
+`powershell -ExecutionPolicy Bypass -File packaging/PublishSDK.ps1`，再
+`pip install dist\sdk\handwechat_gateway_sdk-<version>-py3-none-any.whl`。
+
+2. 部署侧启动 HandWeChat API 与消息网关（默认 `ws://127.0.0.1:8100`）。本服务
+   只连网关，不访问 HandWeChat API。
+3. 在网关的 `data/gateway_config.json` 里登记本应用，`id`/`token` 必须与
+   `config/game_config.json` 的 `gateway_app_id`/`gateway_token` 一致：
+
+```json
+{"id": "social-game", "name": "群游戏", "priority": 100,
+ "token": "", "timeout_ms": 1500}
+```
+
+4. 微信登录，并保持目标群聊在当前聊天窗口打开。
+5. 启动游戏服务：
 
 ```bash
 python -m game.main --config config/game_config.json --db data/game.db --log-dir data/logs
 ```
 
-5. 服务启动后会自动：等待微信在线 → 启动 OCR 监听 → 建立
-   `WS /api/v1/ws/messages` 长连接实时接收新消息（连接建立前的历史消息不回补）。
-   每批只处理 `is_latest` 的那条（不看 `confidence`），其余跳过；整帧没有
-   `is_latest` 字段（API 未升级）时整帧丢弃。
-6. **Web 控制台**：`http://127.0.0.1:8001/`（`web_host` 默认 `0.0.0.0`，局域网
+6. 服务启动后会自动：连接网关（`WS /api/v1/gateway/ws/app`）→ 用 `welcome.context`
+   初始化微信在线、OCR 监听和群标题 → 接收网关逐条下发的 `offer`，只处理
+   `is_latest=true` 的消息；有指令命中时回 `consume` 并通过网关代发回复，否则回
+   `skip` 放行给其他应用。连接建立前的历史消息不会补发。
+   收到 `upstream_state` / `chat_changed` 会同步更新在线状态和群标题；每次代发的
+   `send_result` 回执用于记录最终发送结果。
+7. **Web 控制台**：`http://127.0.0.1:8001/`（`web_host` 默认 `0.0.0.0`，局域网
    可通过本机 IP:8001 访问）：
    - **玩家数据**：各群玩家金币/魅力/主人/连签，支持管理员操作（加扣金币、
      设魅力、解除奴隶），自动写 `reason=admin` 流水；
    - **动作日志**：服务运行期间的指令与事件（内存最近 500 条，含发送失败、
-     WS 断连），更早的查 `data/logs/game.log`；
-   - **微信服务状态**：游戏侧（WS、群、最新消息、队列、错误）与部署侧
-     （在线、OCR、缓冲、去重计数）实时展示；
+     网关认证失败、上游状态变化），更早的查 `data/logs/game.log`；
+   - **运行状态**：网关连接、应用 ID、offer 数、微信在线、OCR 监听、上游连接、
+     当前群与发送失败数实时展示；
    - **游戏配置**：分组编辑全部配置（含礼物目录、打工事件表），保存前校验，
-     保存后自动热加载、立即生效（改动写入动作日志）；仅 `api_base_url`、
-     `web_host`、`health_port`、`timezone` 四项需重启 game.main 生效。
-7. `/health` JSON 接口保留，供脚本监控。
+     保存后自动热加载、立即生效（改动写入动作日志）；仅 `gateway_url`、
+     `gateway_app_id`、`gateway_token`、`web_host`、`health_port`、`timezone`
+     需重启 game.main 生效。
+8. `/health` JSON 接口保留，供脚本监控。
 
 ## 本地模拟器（不需要微信）
 
@@ -111,6 +128,8 @@ python -m game.simulator
 - 礼物：`gifts` 目录（价格与魅力），8 种，10~5200 金币。
 - 打工事件：`work_events`，权重随机，正/负/零比例 60/30/10。
 - 限流：单用户指令间隔 2 秒、帮助冷却 60 秒、出站 15 条/分钟、回复上限 500 字符（超长拆条）。
+- 网关：`gateway_url`、`gateway_app_id`、`gateway_token`，需与网关配置的
+  `apps[]` 一致；`token` 为空表示不校验。
 - 拍一拍：`bot_name` 机器人昵称、`bot_name_aliases` OCR 易混淆写法、`pat_reply_texts`
   回复文案数组（空数组即关闭）、`pat_reply_cooldown_seconds` 每人回复冷却。
 - 群：`allowed_groups` 为空表示所有群都处理；否则按规范化群标题白名单。
@@ -129,16 +148,17 @@ python -m game.simulator
 
 - `data/logs/game.log`，10MB 轮转，保留 5 份。
 - 每条指令一行：`时间 | 级别 | group=... sender=... cmd=... result=... cost_ms=...`。
-- 发送任务失败记录 `task_id`、`error_code`、`error_message`。
+- 网关 `send_result` 回执 `final=true` 且失败时记录样式与错误码，同时写入动作日志。
 
 ## 已知限制
 
 1. **昵称含空格的玩家无法被 @ 指令定位**（`@用户名` 只取第一个空格前的 token）。
 2. 微信昵称改名后视为新玩家，旧数据不自动迁移。
 3. OCR 无法识别昵称时消息 `sender=对方`，会被忽略，该玩家也不会注册。
-4. 历史消息不补处理：WebSocket 只推送连接建立之后识别到的新消息，断线期间的消息
-   也不补发，避免重放扣费指令。
-5. 发送依赖 OCR 回读校验；`SEND_VERIFY_FAILED` 不重试，避免重复发送。
+4. 历史消息不补处理：网关只下发在线实时消息，连接前与断线期间的消息都不补发，
+   避免重放扣费指令。
+5. 发送最终结果依赖网关的 `send_result` 回执；回执超时或网关未推最终结果时，
+   只能查 `gateway.log`。
 6. 消息缓冲在 API 进程内存中，仅适用于单进程单 worker 部署。
 7. 拍一拍只识别带引号的系统行格式；OCR 漏识别引号时不会触发。
 
@@ -182,16 +202,18 @@ OCR 常把指令里的空格吞掉（`送礼@是你的益达 玫瑰` → `送礼
 python -X utf8 -m pytest game/tests -q
 ```
 
-111 个用例覆盖：解析器（全角/去重/前缀/标点）、经济与随机公式（固定随机源）、
+140 个用例覆盖：解析器（全角/去重/前缀/标点）、经济与随机公式（固定随机源）、
 四大系统全部指令的成功与失败路径、调教互动与"但/却"文案、去重/限流/冷却、多群隔离、
-白名单暂停、回复拆分、与假 API 的 HTTP/WebSocket 联调、WS 消息分发与最新消息追踪。
+白名单暂停、回复拆分与投递、与假网关的 offer/decision/send 联调（含 `is_latest`
+过滤、`welcome.context`、`upstream_state`/`chat_changed`、`send_result` 与 4401 认证失败）。
 
 ## 运维提示
 
 - 修改配置后需重启服务。
 - 需要人工调整金币/魅力/奴隶关系时，直接用 SQLite 客户端改 `data/game.db`
   （服务运行中改动需谨慎，建议停服后操作）。
-- OCR 监听由使用端自行启动和维护，本服务不调用 `/api/v1/listener/start`
-  和 `/api/v1/attach`；WebSocket 断线（含微信离线、监听未开、API 重启）按
-  1/2/5/10/30 秒退避重连。WS 帧不带游标，连接位置由服务端维护，重连后从
-  服务端当前进度继续推送，不会再出现「本地存着旧游标收不到消息」。
+- OCR 监听由使用端自行启动和维护，本服务不访问 HandWeChat API；网关断线（含
+  微信离线、网关重启）由 SDK 每 3 秒自动重连，不可恢复的关闭码
+  （4009/4400/4401/4404）记录后停止重连，修好网关配置后重启 game.main。
+  群标题与在线状态来自网关的 `welcome.context`、`upstream_state` 和
+  `chat_changed` 推送。
