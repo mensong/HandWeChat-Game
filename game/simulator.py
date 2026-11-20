@@ -340,11 +340,9 @@ const META = [
     ["command_aliases", "指令别名", "json", '如 {"购买奴隶":["购买","买下"]}'],
     ["reply_max_chars", "单条回复上限（字符）", "num", "超长自动拆条"],
   ]},
-  {group: "拍一拍", items: [
-    ["bot_name", "机器人昵称", "text", "被拍名字与它精确匹配才回复"],
-    ["bot_name_aliases", "昵称别名（数组）", "json", "OCR 易混淆的写法，可留空"],
-    ["pat_reply_texts", "回复文案（数组）", "json", "支持 {pat} {patted} {what}；空数组 = 关闭"],
-    ["pat_reply_cooldown_seconds", "每人回复冷却（秒）", "num", ""],
+  {group: "自动回复", items: [
+    ["bot_name", "机器人昵称", "text", "配置中所有字符串可用 {bot} 引用；pattern 内自动转义"],
+    ["auto_replies", "回复规则（JSON 数组）", "json_text", '每项：name 名称、pattern 正则、replies 文案（字符串或数组）、cooldown_seconds 冷却、cooldown_key 冷却键（默认 {sender}）、enabled 启用、allow_ignored_senders 允许系统行；文案支持 {sender} {bot} 与 {msg1}..{msgN}'],
   ]},
   {group: "发送限速", items: [
     ["send_max_per_minute", "每分钟最多发送（≤20）", "num", ""],
@@ -445,6 +443,9 @@ function render() {
       let input;
       if (type === "bool") {
         input = `<input type="checkbox" id="f_${esc(key)}" ${CFG[key] ? "checked" : ""}>`;
+      } else if (type === "json_text") {
+        input = `<textarea id="f_${esc(key)}" rows="14"
+                  style="width:100%;font-family:monospace">${esc(JSON.stringify(CFG[key], null, 2))}</textarea>`;
       } else if (type === "json") {
         input = `<input type="text" id="f_${esc(key)}" value='${esc(JSON.stringify(CFG[key]))}'>`;
       } else {
@@ -501,7 +502,7 @@ function collect() {
       const el = document.getElementById("f_" + key);
       if (type === "bool") { data[key] = el.checked; continue; }
       const v = el.value.trim();
-      if (type === "json") {
+      if (type === "json" || type === "json_text") {
         try { data[key] = JSON.parse(v); }
         catch (e) { throw new Error(key + " 不是合法 JSON：" + v); }
         continue;

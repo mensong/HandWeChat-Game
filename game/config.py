@@ -22,9 +22,7 @@ DEFAULTS = {
     "reply_max_chars": 500,
 
     "bot_name": "",
-    "bot_name_aliases": [],
-    "pat_reply_texts": [],
-    "pat_reply_cooldown_seconds": 10,
+    "auto_replies": [],
 
     "send_max_per_minute": 15,
     "send_min_interval_ms": 1500,
@@ -101,7 +99,7 @@ _INT_KEYS = [
     "rebel_ransom_max", "rebel_compensation_max",
     "signin_base_reward", "signin_streak_step", "signin_max_reward",
     "transfer_daily_limit", "gift_max_quantity", "gift_daily_spend_limit",
-    "gift_rank_days", "health_port", "pat_reply_cooldown_seconds",
+    "gift_rank_days", "health_port",
     "interaction_coins_min", "interaction_coins_max",
     "interaction_charm_min", "interaction_charm_max",
     "interaction_cooldown_minutes", "interaction_max_per_day",
@@ -136,18 +134,33 @@ class Config:
         merged = dict(DEFAULTS)
         for k, v in data.items():
             merged[k] = v
-        self._data = merged
+        self._raw = merged
+        self._data = self._render_globals(merged)
         self._validate()
-        self.gifts = [self._make_gift(g) for g in merged["gifts"]]
-        self.work_events = [self._make_event(e) for e in merged["work_events"]]
-        self.interactions = [models_Interaction(i) for i in merged["slave_interactions"]]
+        self.gifts = [self._make_gift(g) for g in self._data["gifts"]]
+        self.work_events = [self._make_event(e) for e in self._data["work_events"]]
+        self.interactions = [models_Interaction(i)
+                             for i in self._data["slave_interactions"]]
+        self.auto_replies = [self._make_rule(r, i)
+                             for i, r in enumerate(self._data["auto_replies"])]
         self.gifts.sort(key=lambda g: g.price)
 
     def get(self, key: str):
         return self._data[key]
 
     def as_dict(self) -> dict:
-        return dict(self._data)
+        """原始配置（保留 {bot} 等占位符），供配置页/测试读写。"""
+        return dict(self._raw)
+
+    def _render_globals(self, data: dict) -> dict:
+        bot = data.get("bot_name")
+        if not isinstance(bot, str):
+            raise ConfigError("bot_name must be a string")
+        if not bot:
+            if _contains_bot(data):
+                raise ConfigError("bot_name is empty but {bot} is referenced in config")
+            return dict(data)
+        return {k: _render_value(v, bot, k == "pattern") for k, v in data.items()}
 
     @staticmethod
     def _make_gift(g: dict):
@@ -159,6 +172,46 @@ class Config:
         if not isinstance(g["charm"], (int, float)) or g["charm"] <= 0:
             raise ConfigError(f"gift {g['id']} charm must be positive number")
         return models_Gift(g)
+
+    @staticmethod
+    def _make_rule(r, index: int):
+        if not isinstance(r, dict):
+            raise ConfigError(f"auto_replies[{index}] must be an object")
+        name = r.get("name") or f"规则{index + 1}"
+        if not isinstance(name, str) or not name.strip():
+            raise ConfigError(f"auto_replies[{index}] name must be a non-empty string")
+        pattern = r.get("pattern")
+        if not isinstance(pattern, str) or not pattern:
+            raise ConfigError(f"auto_replies[{index}] pattern must be a non-empty string")
+        try:
+            regex = re.compile(pattern)
+        except re.error as e:
+            raise ConfigError(f"auto_replies[{index}] invalid pattern: {e}")
+        replies = r.get("replies")
+        if isinstance(replies, str):
+            replies = [replies]
+        if not isinstance(replies, list) or not replies \
+                or any(not isinstance(x, str) or not x for x in replies):
+            raise ConfigError(f"auto_replies[{index}] replies must be a non-empty "
+                              f"string or list of non-empty strings")
+        cooldown = r.get("cooldown_seconds", 0)
+        if isinstance(cooldown, bool) or not isinstance(cooldown, (int, float)) \
+                or cooldown < 0:
+            raise ConfigError(f"auto_replies[{index}] cooldown_seconds must be "
+                              f"a number >= 0")
+        cooldown_key = r.get("cooldown_key", "{sender}")
+        if not isinstance(cooldown_key, str) or not cooldown_key:
+            raise ConfigError(f"auto_replies[{index}] cooldown_key must be "
+                              f"a non-empty string")
+        enabled = r.get("enabled", True)
+        allow_ignored = r.get("allow_ignored_senders", False)
+        if not isinstance(enabled, bool) or not isinstance(allow_ignored, bool):
+            raise ConfigError(f"auto_replies[{index}] enabled / "
+                              f"allow_ignored_senders must be booleans")
+        return models_AutoReplyRule(
+            name=name, regex=regex, replies=list(replies),
+            cooldown_seconds=float(cooldown), cooldown_key=cooldown_key,
+            allow_ignored_senders=allow_ignored, enabled=enabled)
 
     @staticmethod
     def _make_event(e: dict):
@@ -224,13 +277,8 @@ class Config:
                                                   for a in alist):
                 raise ConfigError(
                     f"command_aliases[{canonical}] must be a list of non-empty strings")
-        if not isinstance(d["bot_name"], str):
-            raise ConfigError("bot_name must be a string")
-        for k in ("bot_name_aliases", "pat_reply_texts"):
-            if not isinstance(d[k], list) or any(not isinstance(x, str) for x in d[k]):
-                raise ConfigError(f"{k} must be a list of strings")
-        if d["pat_reply_cooldown_seconds"] < 0:
-            raise ConfigError("pat_reply_cooldown_seconds must be >= 0")
+        if not isinstance(d["auto_replies"], list):
+            raise ConfigError("auto_replies must be a list")
         for k in ("rebel_master_multipliers", "rebel_slave_multipliers"):
             if not isinstance(d[k], list) or not d[k]:
                 raise ConfigError(f"{k} must be a non-empty list")
@@ -273,14 +321,6 @@ class Config:
                 return g
         return None
 
-    @property
-    def bot_names(self) -> frozenset[str]:
-        names = [self.get("bot_name"), *self.get("bot_name_aliases")]
-        return frozenset(re.sub(r"\s+", "", n) for n in names if n.strip())
-
-    def is_bot(self, name: str) -> bool:
-        return name in self.bot_names
-
 
 def models_Gift(g: dict):
     from .models import Gift
@@ -297,6 +337,38 @@ def models_WorkEvent(e: dict):
 def models_Interaction(i: dict):
     from .models import Interaction
     return Interaction(text=i["text"], tone=i["tone"])
+
+
+def models_AutoReplyRule(**kwargs):
+    from .models import AutoReplyRule
+    return AutoReplyRule(**kwargs)
+
+
+_BOT_PLACEHOLDER = "{bot}"
+
+
+def _contains_bot(value) -> bool:
+    if isinstance(value, str):
+        return _BOT_PLACEHOLDER in value
+    if isinstance(value, list):
+        return any(_contains_bot(v) for v in value)
+    if isinstance(value, dict):
+        return any(_contains_bot(v) for v in value.values())
+    return False
+
+
+def _render_value(value, bot: str, in_pattern: bool = False):
+    """把 {bot} 替换为 bot_name；pattern 内先 re.escape，避免昵称里的元字符生效。"""
+    if isinstance(value, str):
+        if _BOT_PLACEHOLDER not in value:
+            return value
+        return value.replace(_BOT_PLACEHOLDER, re.escape(bot) if in_pattern else bot)
+    if isinstance(value, list):
+        return [_render_value(v, bot, in_pattern) for v in value]
+    if isinstance(value, dict):
+        return {k: _render_value(v, bot, in_pattern or k == "pattern")
+                for k, v in value.items()}
+    return value
 
 
 def read_config_file(path: str | Path) -> tuple[str, dict]:

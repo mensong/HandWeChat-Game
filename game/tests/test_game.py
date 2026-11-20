@@ -1,6 +1,4 @@
 """端到端处理器测试（内存库 + 固定随机源）。"""
-from game.replies import pat_reply
-from game.rng import Rng
 
 
 def coins(env, name):
@@ -744,32 +742,26 @@ def test_exact_command_with_random_spaces(env):
     assert "签到成功" in reply
 
 
-# ---------- 拍一拍 ----------
+# ---------- 自动回复规则 ----------
 
-def test_pat_bot_replies(env):
-    template = env.cfg.get("pat_reply_texts")[0]
-    env.rng.set_sequence([template])
+def test_pat_rule_replies(env):
     reply = env.send("我", "“是你的益达”拍了拍“童声微蔓”")
-    assert reply == pat_reply(template, "是你的益达", "童声微蔓", "")
+    assert reply == "是你的益达 拍了拍我，我醒啦～"
     # 系统行的 sender 是"我"，不能因此注册成玩家
     assert env.store.get_player(env.group, "我") is None
 
 
-def test_pat_bot_alias_and_what(env):
-    template = env.cfg.get("pat_reply_texts")[0]
-    env.rng.set_sequence([template])
+def test_pat_rule_alias_and_what(env):
     reply = env.send("我", "“是你的益达”拍了拍“童声徽蔓”叫了一声“嗯~”")
-    assert reply == pat_reply(template, "是你的益达", "童声徽蔓", "叫了一声“嗯~”")
+    assert reply == "是你的益达 拍了拍我，我醒啦～"
 
 
-def test_pat_other_member_silent(env):
+def test_pat_rule_other_member_silent(env):
     env.send("我", "“是你的益达”拍了拍“老婆”")
     assert env.sender.sent == []
 
 
-def test_pat_reply_cooldown(env):
-    texts = env.cfg.get("pat_reply_texts")
-    env.rng.set_sequence([texts[0], texts[0]])
+def test_pat_rule_cooldown(env):
     env.send("我", "“A”拍了拍“童声微蔓”")
     assert len(env.sender.sent) == 1
     env.clock.advance(seconds=3)  # 距上次 6 秒，仍在 10 秒冷却内
@@ -780,19 +772,66 @@ def test_pat_reply_cooldown(env):
     assert len(env.sender.sent) == 2
 
 
-def test_pat_disabled_without_texts(env):
-    from game.config import Config
-    from game.engine import Engine
-    data = {k: env.cfg.get(k) for k in env.cfg._data}
-    data["pat_reply_texts"] = []
-    engine2 = Engine(Config(data), env.store, env.clock, env.rng, env.engine.ctx.log)
-    engine2.attach_sender(env.sender)
-    engine2.handle_health({"chat_title": "888 种田大队(32)",
-                           "online": True, "listener_running": True})
-    engine2.handle_message({"id": "600", "cursor": 600, "sender": "我",
-                            "content": "“A”拍了拍“童声微蔓”",
-                            "received_at": env.clock.t.isoformat()})
-    assert env.sender.sent == []
+def test_rule_sender_variable(env_factory):
+    e = env_factory(auto_replies=[{
+        "name": "点名", "pattern": r"^你好$", "replies": "{sender} 你好呀"}])
+    assert e.send("张三", "你好") == "张三 你好呀"
+
+
+def test_rule_missing_group_is_empty(env_factory):
+    e = env_factory(auto_replies=[{
+        "name": "括号", "pattern": r"^头(.*)尾(.*)$",
+        "replies": "[{msg1}][{msg2}]"}])
+    assert e.send("张三", "头尾") == "[][]"
+
+
+def test_rule_matches_ignoring_spaces(env_factory):
+    e = env_factory(auto_replies=[{
+        "name": "空格", "pattern": r"^你好啊$", "replies": "嗨"}])
+    assert e.send("张三", "你 好 啊") == "嗨"
+
+
+def test_rule_first_match_wins(env_factory):
+    e = env_factory(auto_replies=[
+        {"name": "一", "pattern": r"^测试$", "replies": "第一条"},
+        {"name": "二", "pattern": r"^测试$", "replies": "第二条"},
+    ])
+    assert e.send("张三", "测试") == "第一条"
+
+
+def test_rule_runs_before_commands(env_factory):
+    e = env_factory(auto_replies=[{
+        "name": "拦截", "pattern": r"^签到$", "replies": "今天不签"}])
+    assert e.send("张三", "签到") == "今天不签"
+    assert e.store.get_player(e.group, "张三") is None
+
+
+def test_rule_ignored_sender_blocked(env_factory):
+    e = env_factory(auto_replies=[{
+        "name": "全匹配", "pattern": r"^任意$", "replies": "收到"}])
+    e.send("我", "任意")
+    assert e.sender.sent == []
+
+
+def test_rule_allow_ignored_sender(env_factory):
+    e = env_factory(auto_replies=[{
+        "name": "系统行", "pattern": r"^任意$", "replies": "收到",
+        "allow_ignored_senders": True}])
+    assert e.send("我", "任意") == "收到"
+
+
+def test_rule_disabled(env_factory):
+    e = env_factory(auto_replies=[{
+        "name": "关闭", "pattern": r"^测试$", "replies": "不该出现",
+        "enabled": False}])
+    e.send("张三", "测试")
+    assert e.sender.sent == []
+
+
+def test_rule_bot_variable(env_factory):
+    e = env_factory(bot_name="小助手", auto_replies=[{
+        "name": "问名字", "pattern": r"^你是谁$", "replies": "我是{bot}"}])
+    assert e.send("张三", "你是谁") == "我是小助手"
 
 
 # ---------- @ 前缀形式 ----------

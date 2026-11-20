@@ -34,12 +34,6 @@ def interaction_effect(slave: str, tone: str, changes) -> str:
     return "，".join(parts)
 
 
-def pat_reply(template: str, pat: str, patted: str, what: str) -> str:
-    return (template.replace("{pat}", pat)
-            .replace("{patted}", patted)
-            .replace("{what}", what))
-
-
 def my_coins(sender: str, coins: int, rank: Optional[int]) -> str:
     pos = f"群内第 {rank} 名" if rank is not None else "未上榜"
     return f"我的金币：\n{sender} 当前金币 {coins}（{pos}）。"

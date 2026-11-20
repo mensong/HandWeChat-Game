@@ -1,5 +1,5 @@
 """解析器与规范化测试（含 OCR 空格容错）。"""
-from game.parser import parse, parse_pat, usage_hint
+from game.parser import parse, usage_hint
 from game.util import normalize_text
 
 
@@ -163,33 +163,6 @@ def test_invalid_target_rejected(cfg):
 def test_fullwidth_digits(cfg):
     assert p(cfg, "转账＠张三　１００").amount == 100
     assert p(cfg, "签到\n").name == "sign_in"
-
-
-# ---------- 拍一拍 ----------
-
-def test_pat_parse():
-    pat = parse_pat("“是你的益达”拍了拍“童声微蔓”")
-    assert (pat.pat, pat.patted, pat.what) == ("是你的益达", "童声微蔓", "")
-
-
-def test_pat_parse_with_what():
-    pat = parse_pat("“是你的益达”拍了拍“童声微蔓”叫了一声“嗯~”")
-    assert (pat.pat, pat.patted, pat.what) == ("是你的益达", "童声微蔓", "叫了一声“嗯~”")
-
-
-def test_pat_quote_and_space_variants():
-    pat = parse_pat('"张三" 拍 了 拍 "李四"')
-    assert (pat.pat, pat.patted, pat.what) == ("张三", "李四", "")
-    pat = parse_pat("「张三」拍了拍「李四」的头发")
-    assert (pat.pat, pat.patted, pat.what) == ("张三", "李四", "的头发")
-    pat = parse_pat("“ 是 你 的 益 达 ” 拍了拍 “ 童 声 微 蔓 ”")
-    assert (pat.pat, pat.patted) == ("是你的益达", "童声微蔓")
-
-
-def test_pat_parse_rejects():
-    assert parse_pat("我今天拍了拍你的头") is None
-    assert parse_pat("张三拍了拍李四") is None
-    assert parse_pat("“张三”拍了拍“”") is None
 
 
 def _matcher(names):

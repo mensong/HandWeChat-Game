@@ -16,11 +16,19 @@
   "usage_hint_cooldown_seconds": 10,
   "reply_max_chars": 500,
   "bot_name": "饭人休闲传",
-  "bot_name_aliases": [],
-  "pat_reply_texts": [
-    "{pat} 拍了拍我，我醒啦～\n发送「金币系统」「魅力系统」「礼物系统」「奴隶系统」可看各系统详情。\n这里是本群游戏玩法总览：\n【金币】我的金币 / 签到 / 转账@用户名 数量 / 金币榜\n【魅力】我的魅力 / 魅力榜\n【礼物】礼物列表 / 送礼@用户名 礼物名 [数量] / 礼物榜\n【奴隶】购买奴隶@用户名 / 给他自由@用户名 / 奴隶打工 / 我的奴隶 / 我要自由\n签到每天领金币，送礼能加魅力。"
+  "auto_replies": [
+    {
+      "name": "拍一拍",
+      "enabled": true,
+      "pattern": "^[“\"「『]([^”\"」』]+)[”\"」』]拍了拍[“\"「『]({bot})[”\"」』](.*)$",
+      "replies": [
+        "{msg1} 拍了拍我，我醒啦～\n发送「金币系统」「魅力系统」「礼物系统」「奴隶系统」可看各系统详情。\n这里是本群游戏玩法总览：\n【金币】我的金币 / 签到 / 转账@用户名 数量 / 金币榜\n【魅力】我的魅力 / 魅力榜\n【礼物】礼物列表 / 送礼@用户名 礼物名 [数量] / 礼物榜\n【奴隶】购买奴隶@用户名 / 给他自由@用户名 / 奴隶打工 / 我的奴隶 / 我要自由\n签到每天领金币，送礼能加魅力。"
+      ],
+      "cooldown_seconds": 10,
+      "cooldown_key": "{msg1}",
+      "allow_ignored_senders": true
+    }
   ],
-  "pat_reply_cooldown_seconds": 10,
   "send_max_per_minute": 15,
   "send_min_interval_ms": 1500,
   "send_queue_max": 100,

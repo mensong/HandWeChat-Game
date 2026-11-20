@@ -53,10 +53,17 @@ def cfg():
     data = load_config(REPO / "config" / "game_config.json").as_dict()
     data.update({k: v for k, v in DEFAULTS.items()
                  if k not in ("gifts", "work_events", "slave_interactions",
-                              "bot_name", "bot_name_aliases", "pat_reply_texts")})
-    # 拍一拍用例使用固定昵称，避免随生产配置里的 bot_name 漂移
+                              "auto_replies")})
+    # 拍一拍用例使用固定昵称与文案，避免随生产配置漂移
     data["bot_name"] = "童声微蔓"
-    data["bot_name_aliases"] = ["童声徽蔓"]
+    data["auto_replies"] = [{
+        "name": "拍一拍",
+        "pattern": r"^[“\"「『]([^”\"」』]+)[”\"」』]拍了拍[“\"「『]({bot}|童声徽蔓)[”\"」』](.*)$",
+        "replies": ["{msg1} 拍了拍我，我醒啦～"],
+        "cooldown_seconds": 10,
+        "cooldown_key": "{msg1}",
+        "allow_ignored_senders": True,
+    }]
     # 聊天收入默认关闭，避免影响既有用例的金额预期；专用用例见 env_chat
     data["chat_coins_per_message"] = 0
     return Config(data)
@@ -107,3 +114,19 @@ def env_chat(tmp_path, cfg):
     data["chat_coins_per_message"] = 10
     ns = _build_env(Config(data), tmp_path)
     yield ns
+
+
+@pytest.fixture()
+def env_factory(tmp_path, cfg):
+    """按覆盖参数构建独立环境，用于自定义 auto_replies 等场景。"""
+    from game.config import Config
+    seq = itertools.count(1)
+
+    def build(**overrides):
+        data = cfg.as_dict()
+        data.update(overrides)
+        d = tmp_path / f"env{next(seq)}"
+        d.mkdir()
+        return _build_env(Config(data), d)
+
+    return build

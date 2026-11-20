@@ -17,7 +17,7 @@ from __future__ import annotations
 import re
 
 from .config import Config
-from .models import Command, Pat
+from .models import Command
 from .util import TRAILING_PUNCT
 
 EXACT_COMMANDS = {
@@ -65,7 +65,6 @@ USAGE_KEYWORDS = [
 USAGE_HINT_TEMPLATE = "指令格式不对。用法：{usage}"
 
 MAX_RAW_TARGET = 40
-MAX_PAT_NAME = 40
 
 # @ 前缀形式：@用户名 指令（如 @李四签到 / @李四购买奴隶）
 MENTION_QUERY_COMMANDS = {"my_coins", "my_charm", "my_slaves"}
@@ -79,15 +78,6 @@ MENTION_CMD_LABELS = {
     "gifts_help": "礼物系统", "slaves_help": "奴隶系统",
     "train_all_slaves": "调教所有奴隶",
 }
-
-# 微信拍一拍是居中系统行：OCR 给的 sender 是"我"，参与者只能从正文解析。
-# 兼容常用引号写法与 OCR 在"拍了拍"两侧插入的空格。
-_PAT_RE = re.compile(
-    r"^[“\"＂「『]\s*(?P<pat>.+?)\s*[”\"＂」』]\s*拍\s*了\s*拍\s*"
-    r"[“\"＂「『]\s*(?P<patted>.+?)\s*[”\"＂」』](?P<what>.*)$",
-    re.DOTALL,
-)
-
 
 def _compact(text: str) -> str:
     return re.sub(r"\s+", "", text)
@@ -262,28 +252,6 @@ def _parse_mention(rest: str, cfg: Config | None, table,
     if cmd is not None:
         cmd.mention = target
     return cmd
-
-
-def _clean_pat_name(raw: str) -> str | None:
-    name = re.sub(r"\s+", "", raw)
-    if not name or len(name) > MAX_PAT_NAME:
-        return None
-    return name
-
-
-def parse_pat(text: str) -> Pat | None:
-    """解析拍一拍：`“A”拍了拍“B”` / `“A”拍了拍“B”叫了一声“嗯~”`。
-
-    只认带引号的格式；OCR 丢失引号时按普通消息忽略，避免闲聊误触发。
-    """
-    m = _PAT_RE.match(text)
-    if not m:
-        return None
-    pat = _clean_pat_name(m.group("pat"))
-    patted = _clean_pat_name(m.group("patted"))
-    if pat is None or patted is None:
-        return None
-    return Pat(pat=pat, patted=patted, what=m.group("what").strip())
 
 
 def parse(text: str, cfg: Config | None = None,

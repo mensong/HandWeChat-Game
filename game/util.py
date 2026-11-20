@@ -63,6 +63,16 @@ def normalize_text(text: str | None, allow_hash: bool = True) -> str:
     return t
 
 
+def compact_text(text: str | None) -> str:
+    """自动回复规则匹配用文本：NFKC 规范化后删除全部空白。
+
+    OCR 会在字间、昵称内插入空格，规则正则不必再写 \\s*。
+    """
+    if text is None:
+        return ""
+    return re.sub(r"\s+", "", unicodedata.normalize("NFKC", text))
+
+
 def normalize_title(title: str | None) -> str:
     """群标题规范化：NFKC、去掉全部空白（OCR 空格噪声）、去掉尾部成员数。
 

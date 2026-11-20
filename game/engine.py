@@ -5,15 +5,14 @@ import logging
 import time
 from collections import deque
 
+from .autoreply import match_rule, render
 from .config import Config
 from .context import Ctx
 from .dispatcher import Dispatcher
-from .models import Pat
 from .parser import (HELP_COMMANDS, MENTION_CMD_LABELS, MENTION_QUERY_COMMANDS,
-                     MENTION_TARGET_COMMANDS, parse, parse_pat, usage_hint)
-from .replies import pat_reply
+                     MENTION_TARGET_COMMANDS, parse, usage_hint)
 from .store import Store
-from .util import fmt_iso, normalize_text, normalize_title
+from .util import compact_text, fmt_iso, normalize_text, normalize_title
 
 
 class GroupTracker:
@@ -62,7 +61,7 @@ class Engine:
         self._last_help: dict[tuple[str, str], float] = {}
         self._last_usage: dict[tuple[str, str], float] = {}
         self._last_error: dict[tuple[str, str], float] = {}
-        self._last_pat: dict[tuple[str, str], float] = {}
+        self._last_auto: dict[tuple[str, str, str], float] = {}
         self.paused = False
         self._paused_group: str | None = None
         self.cursor = 0  # 最后一条已接收消息的 id，不是流位置
@@ -115,11 +114,10 @@ class Engine:
         if self._content_dupe(group, sender, text, now):
             self.log.info("dup content: group=%s sender=%s", group, sender)
             return
-        # 拍一拍是居中系统行，OCR 把 sender 标成"我"，需赶在 ignore_senders 之前解析；
-        # 参与双方只能从正文取，不能依赖 sender。
-        pat = parse_pat(text)
-        if pat is not None:
-            self._handle_pat(group, pat, now)
+        # 通用自动回复规则：去重后、忽略发送者之前匹配，命中即回复并结束。
+        # 系统行（如拍一拍）的 sender 是“我”，需规则配 allow_ignored_senders 放行。
+        if self._handle_auto_reply(group, sender,
+                                   compact_text(msg.get("content")), now):
             return
         if sender in self.cfg.get("ignore_senders"):
             return
@@ -207,24 +205,26 @@ class Engine:
         if self._sender is not None:
             self._sender.enqueue(text)
 
-    def _handle_pat(self, group: str, pat: Pat, now) -> None:
-        if not self.cfg.is_bot(pat.patted):
-            return
-        texts = self.cfg.get("pat_reply_texts")
-        if not texts:
-            return
-        key = (group, pat.pat)
-        last = self._last_pat.get(key)
-        if last is not None and (now.timestamp() - last) < self.cfg.get("pat_reply_cooldown_seconds"):
-            self.log.info("pat cooldown: group=%s pat=%s", group, pat.pat)
-            return
-        self._last_pat[key] = now.timestamp()
+    def _handle_auto_reply(self, group: str, sender: str, text: str, now) -> bool:
+        """命中规则返回 True（即使冷却中），消息不再进入指令流程。"""
+        matched = match_rule(self.cfg.auto_replies, text, sender,
+                             self.cfg.get("ignore_senders"))
+        if matched is None:
+            return False
+        rule, variables = matched
+        key = (rule.name, group, render(rule.cooldown_key, variables))
+        last = self._last_auto.get(key)
+        if last is not None and (now.timestamp() - last) < rule.cooldown_seconds:
+            self.log.info("auto reply cooldown: rule=%s group=%s", rule.name, group)
+            return True
+        self._last_auto[key] = now.timestamp()
         started = time.monotonic()
-        reply = pat_reply(self.rng.choice(texts), pat.pat, pat.patted, pat.what)
-        self._log_command(group, pat.pat, "pat", "ok", started,
+        reply = render(self.rng.choice(rule.replies), variables)
+        self._log_command(group, sender, rule.name, "ok", started,
                           detail=reply.split("\n", 1)[0][:120])
         if self._sender is not None:
             self._sender.enqueue(reply)
+        return True
 
     def apply_config(self, new_cfg: Config) -> None:
         """热加载：整体替换运行时配置引用。

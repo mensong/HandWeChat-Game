@@ -1,6 +1,7 @@
 """数据模型。"""
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -62,7 +63,11 @@ class Command:
 
 
 @dataclass
-class Pat:
-    pat: str
-    patted: str
-    what: str = ""
+class AutoReplyRule:
+    name: str
+    regex: re.Pattern
+    replies: list
+    cooldown_seconds: float = 0.0
+    cooldown_key: str = "{sender}"
+    allow_ignored_senders: bool = False
+    enabled: bool = True
