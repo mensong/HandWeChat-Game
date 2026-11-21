@@ -11,6 +11,7 @@ DEFAULTS = {
     "gateway_url": "ws://127.0.0.1:8100/api/v1/gateway/ws/app",
     "gateway_app_id": "social-game",
     "gateway_token": "",
+    "gateway_rules": None,
 
     "allow_hash_prefix": True,
     "ignore_senders": ["我", "对方", "未知", ""],
@@ -122,7 +123,7 @@ class ConfigError(Exception):
 
 
 # 这些参数涉及启动时建立的连接/绑定/时钟，热加载无法生效，改动后需重启
-RESTART_KEYS = {"gateway_url", "gateway_app_id", "gateway_token",
+RESTART_KEYS = {"gateway_url", "gateway_app_id", "gateway_token", "gateway_rules",
                 "web_host", "health_port", "timezone"}
 
 
@@ -247,6 +248,7 @@ class Config:
             raise ConfigError("gateway_app_id must be a non-empty string")
         if not isinstance(d["gateway_token"], str):
             raise ConfigError("gateway_token must be a string")
+        self._validate_gateway_rules(d["gateway_rules"])
         if d["slave_price_random_min"] < 0 or d["slave_price_random_max"] < d["slave_price_random_min"]:
             raise ConfigError("invalid slave_price_random range")
         if not 0 <= d["charm_decay_rate"] < 1:
@@ -313,6 +315,50 @@ class Config:
             raise ConfigError("ransom_cooldown_minutes must be >= 0")
         if d["ransom_max_per_day"] < 1:
             raise ConfigError("ransom_max_per_day must be >= 1")
+
+    @staticmethod
+    def _validate_gateway_rules(rules) -> None:
+        """手写网关规则按网关侧同一套上限校验，避免握手时才被 4400 拒绝。"""
+        if rules is None:
+            return
+        if not isinstance(rules, list):
+            raise ConfigError("gateway_rules must be null or a list")
+        if len(rules) > 32:
+            raise ConfigError("gateway_rules 最多 32 条")
+        for i, rule in enumerate(rules):
+            if not isinstance(rule, dict):
+                raise ConfigError(f"gateway_rules[{i}] must be an object")
+            unknown = set(rule) - {"keywords", "regex", "senders", "chat_types"}
+            if unknown:
+                raise ConfigError(
+                    f"gateway_rules[{i}] 不支持的字段: {sorted(unknown)}")
+            for key in ("keywords", "senders", "chat_types"):
+                terms = rule.get(key)
+                if terms is None:
+                    continue
+                if not isinstance(terms, list) or len(terms) > 32:
+                    raise ConfigError(
+                        f"gateway_rules[{i}].{key} 必须是最多 32 项的数组")
+                for term in terms:
+                    if not isinstance(term, str) or not term.strip():
+                        raise ConfigError(
+                            f"gateway_rules[{i}].{key} 不能包含空字符串")
+            for chat_type in rule.get("chat_types") or []:
+                if chat_type not in ("group", "friend"):
+                    raise ConfigError(
+                        f"gateway_rules[{i}].chat_types 只支持 group / friend")
+            regex = rule.get("regex")
+            if regex is not None:
+                if not isinstance(regex, str) or not regex:
+                    raise ConfigError(f"gateway_rules[{i}].regex 必须是非空字符串")
+                if len(regex) > 200:
+                    raise ConfigError(f"gateway_rules[{i}].regex 最长 200 字符")
+                try:
+                    re.compile(regex)
+                except re.error as e:
+                    raise ConfigError(f"gateway_rules[{i}].regex 非法: {e}")
+            if not any(rule.get(k) for k in ("keywords", "regex", "senders", "chat_types")):
+                raise ConfigError(f"gateway_rules[{i}] 至少需要一个匹配字段")
 
     def find_gift(self, token: str):
         t = token.lower()

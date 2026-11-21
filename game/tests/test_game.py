@@ -756,6 +756,16 @@ def test_pat_rule_alias_and_what(env):
     assert reply == "是你的益达 拍了拍我，我醒啦～"
 
 
+def test_pat_rule_quote_variants(env):
+    cases = [
+        ('"张三"拍了拍"童声微蔓"', "张三"),
+        ("'李四'拍了拍'童声微蔓'", "李四"),
+        ("‘王五’拍了拍‘童声微蔓’", "王五"),
+    ]
+    for text, name in cases:
+        assert env.send("我", text) == f"{name} 拍了拍我，我醒啦～"
+
+
 def test_pat_rule_other_member_silent(env):
     env.send("我", "“是你的益达”拍了拍“老婆”")
     assert env.sender.sent == []

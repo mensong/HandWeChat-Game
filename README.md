@@ -29,8 +29,11 @@ pip install -r requirements.txt
 
 ```json
 {"id": "social-game", "name": "群游戏", "priority": 100,
- "token": "", "timeout_ms": 1500}
+ "token": "", "timeout_ms": 1500, "groups": []}
 ```
+
+`groups` 是网关侧的聊天群白名单，留空表示所有群生效；本服务的 `allowed_groups`
+仍在应用侧再做一层过滤。
 
 4. 微信登录，并保持目标群聊在当前聊天窗口打开。
 5. 启动游戏服务：
@@ -39,7 +42,8 @@ pip install -r requirements.txt
 python -m game.main --config config/game_config.json --db data/game.db --log-dir data/logs
 ```
 
-6. 服务启动后会自动：连接网关（`WS /api/v1/gateway/ws/app`）→ 用 `welcome.context`
+6. 服务启动后会自动：连接网关（`WS /api/v1/gateway/ws/app`）→ 握手时在 `hello.rules`
+   里上报本服务关心的消息（见「网关规则上报」）→ 用 `welcome.context`
    初始化微信在线、OCR 监听和群标题 → 接收网关逐条下发的 `offer`，只处理
    `is_latest=true` 的消息；有指令命中时回 `consume` 并通过网关代发回复，否则回
    `skip` 放行给其他应用。连接建立前的历史消息不会补发。
@@ -55,8 +59,8 @@ python -m game.main --config config/game_config.json --db data/game.db --log-dir
      当前群与发送失败数实时展示；
    - **游戏配置**：分组编辑全部配置（含礼物目录、打工事件表），保存前校验，
      保存后自动热加载、立即生效（改动写入动作日志）；仅 `gateway_url`、
-     `gateway_app_id`、`gateway_token`、`web_host`、`health_port`、`timezone`
-     需重启 game.main 生效。
+     `gateway_app_id`、`gateway_token`、`gateway_rules`、`web_host`、`health_port`、
+     `timezone` 需重启 game.main 生效。
 8. `/health` JSON 接口保留，供脚本监控。
 
 ## 本地模拟器（不需要微信）
@@ -120,9 +124,36 @@ python -m game.simulator
 - `{msg1}`、`{msg2}`…`{msgN}`：正则第 N 个捕获组；消息缺少该部分时为空串
 - 不存在的变量原样保留
 
-拍一拍就是默认配置里的一条规则：`“A”拍了拍“机器人昵称”` 时回复。拍一拍在 OCR 里是
+拍一拍就是默认配置里的一条规则：`“A”拍了拍“机器人昵称”` 时回复。引号兼容 `""`、`''`、
+`‘’` 和 `「」『』`，且开闭引号写在同一个字符集里，OCR 把开、闭引号识别反了也能命中。
+拍一拍在 OCR 里是
 居中系统行，`sender` 会被识别成“我”，所以该规则需开启 `allow_ignored_senders`。
 默认规则用 `({bot})` 匹配机器人昵称；OCR 易混淆的昵称可以写成 `({bot}|饭人徽蔓)`。
+
+## 网关规则上报（hello.rules）
+
+新版网关支持应用在握手时上报 `rules`：先按「聊天群 + 规则」筛出候选应用，再按优先级
+逐个询问，没命中的应用根本收不到消息。本服务在 `hello` 里上报规则，把本应用真正会处理的
+指令、`@用户名` 形式和启用的自动回复告诉网关。
+
+- **默认自动生成**：`gateway_rules` 为 `null` 时，按解析器指令表、`command_aliases`
+  和启用中的 `auto_replies` 推导（当前 4 条），指令或别名改了规则自动跟着变。
+  但规则只在启动时生成并随连接上报：改 `auto_replies`、别名或 `gateway_rules` 后
+  需要重启 game.main，热加载只更新应用侧匹配，不会把新规则推给网关。
+- **手写覆盖**：`gateway_rules` 填非空数组则原样上报；保存配置时按网关同一套上限校验
+  （≤32 条、正则 ≤200 字符、每个列表 ≤32 项、`chat_types` 只支持 `group` / `friend`）。
+  规则随连接上报，修改后需重启 game.main。
+- **写法是前缀匹配**：指令用 `^[#＃]?\s*签到` 这类前缀正则，只容忍行首空白和 `#` 后空格；
+  字间、匹配单元之间不插空白，规则更短。OCR 若在指令中间插了空格，网关不会下发到应用
+  （应用侧解析仍会去空白，但消息已被挡在网关）。
+  宁可多放行（应用侧仍会 `skip`），不能把要处理的消息挡在网关。
+- `"gateway_rules": []` 表示全部匹配，只有兜底/通用机器人才这样配，业务应用不要用。
+- 运行状态里 `gateway.rules` 显示来源（`auto` / `config`）和条数；排查「收不到消息」时，
+  先看网关 `/api/v1/gateway/status` 的 `apps[].rules.mode` 和 `apps[].groups`。
+- 规则表达不了 `is_latest`、`ignore_senders`、冷却等条件，这些仍在应用侧判断；置顶期间
+  网关会绕过规则下发同一聊天群的全部消息，`on_offer` 的 `skip` 兜底照旧。
+- **聊天金币影响**：`chat_coins_per_message` 只对真正下发到应用的消息生效。普通闲聊
+  不再经过网关的规则筛选，因此不会再产生聊天收入，指令类消息照常。
 
 ## 配置
 
@@ -142,7 +173,8 @@ python -m game.simulator
 - 打工事件：`work_events`，权重随机，正/负/零比例 60/30/10。
 - 限流：单用户指令间隔 2 秒、帮助冷却 60 秒、出站 15 条/分钟、回复上限 500 字符（超长拆条）。
 - 网关：`gateway_url`、`gateway_app_id`、`gateway_token`，需与网关配置的
-  `apps[]` 一致；`token` 为空表示不校验。
+  `apps[]` 一致；`token` 为空表示不校验。`gateway_rules` 为 `null` 时自动生成
+  握手规则，填数组则手写覆盖（见「网关规则上报」）。
 - 自动回复：`bot_name` 机器人昵称（配置中所有字符串可用 `{bot}` 引用，
   `pattern` 内自动转义；为空但被引用时拒绝启动/保存）、`auto_replies` 正则回复规则数组
   （见上节），拍一拍也是其中一条。
@@ -174,7 +206,10 @@ python -m game.simulator
 5. 发送最终结果依赖网关的 `send_result` 回执；回执超时或网关未推最终结果时，
    只能查 `gateway.log`。
 6. 消息缓冲在 API 进程内存中，仅适用于单进程单 worker 部署。
-7. 拍一拍只识别带引号的系统行格式；OCR 漏识别引号时不会触发。
+7. 拍一拍只识别带引号的系统行格式；OCR 完全没有引号或输出未列出的引号字符时不会触发。
+8. 网关按上报规则筛选后，普通闲聊不再下发到本服务：聊天金币只对命中规则的消息发放，
+   规则没覆盖的自动回复也不会触发——新增自动回复规则时，`gateway_rules` 为 `null`
+   会自动带上，手写覆盖时需自行同步。
 
 ## 指令别名
 
@@ -201,7 +236,8 @@ OCR 常把指令里的空格吞掉（`送礼@是你的益达 玫瑰` → `送礼
 - `购买奴隶@用户名`、`给他/她自由@用户名`、`调教@奴隶名`、`赎身@用户名`：目标取 `@` 后整段，按
   "精确 → 忽略大小写 → 已知玩家最长前缀"解析（`购买奴隶@张三谢谢` 会命中
   已有玩家 `张三`）。
-- 无参数指令中 OCR 插入的空格无影响（`签 到` ✓）。
+- 无参数指令中 OCR 插入的空格在解析阶段无影响（`签 到` ✓）。注意：上报给网关的规则
+  只在行首与锚点处容忍空白，字间带空格的消息可能在下发前就被过滤掉。
 
 残留歧义（OCR 吞空格导致信息缺失，无法完全消除）：
 
@@ -216,9 +252,10 @@ OCR 常把指令里的空格吞掉（`送礼@是你的益达 玫瑰` → `送礼
 python -X utf8 -m pytest game/tests -q
 ```
 
-140 个用例覆盖：解析器（全角/去重/前缀/标点）、经济与随机公式（固定随机源）、
+165 个用例覆盖：解析器（全角/去重/前缀/标点）、经济与随机公式（固定随机源）、
 四大系统全部指令的成功与失败路径、调教互动与"但/却"文案、去重/限流/冷却、多群隔离、
-白名单暂停、回复拆分与投递、与假网关的 offer/decision/send 联调（含 `is_latest`
+白名单暂停、回复拆分与投递、网关规则生成（指令/别名/自动回复覆盖、闲聊不误放、上限校验）、
+与假网关的 offer/decision/send 联调（含 `hello.rules`、`is_latest`
 过滤、`welcome.context`、`upstream_state`/`chat_changed`、`send_result` 与 4401 认证失败）。
 
 ## 运维提示

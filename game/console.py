@@ -161,7 +161,7 @@ button.ghost { background: #2a313a; color: #d8dde3; border: 1px solid #3a434e;
       </div>
       <p class="hint">保存前会用游戏校验器检查，非法配置不会被写入。
 保存后自动热加载、立即生效（改动会写入动作日志）；
-仅 gateway_url、gateway_app_id、gateway_token、web_host、health_port、timezone 需重启 game.main 生效。</p>
+仅 gateway_url、gateway_app_id、gateway_token、gateway_rules、web_host、health_port、timezone 需重启 game.main 生效。</p>
       <div id="form"></div>
     </section>
   </div>
@@ -172,6 +172,7 @@ const META = [
     ["gateway_url", "网关地址", "text", ""],
     ["gateway_app_id", "网关应用 ID", "text", "需与网关配置 apps[].id 一致"],
     ["gateway_token", "网关 token", "text", "网关配置 apps[].token；留空表示不校验"],
+    ["gateway_rules", "网关规则（JSON）", "json", "null = 自动生成；非空数组则手写覆盖"],
     ["health_port", "控制台/健康检查端口", "num", ""],
     ["web_host", "控制台绑定地址", "text", "0.0.0.0=局域网可访问；127.0.0.1=仅本机"],
     ["timezone", "时区", "text", ""],

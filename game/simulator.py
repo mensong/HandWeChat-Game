@@ -327,6 +327,7 @@ const META = [
     ["gateway_url", "网关地址", "text", "正式服务连接网关使用"],
     ["gateway_app_id", "网关应用 ID", "text", "需与网关配置 apps[].id 一致"],
     ["gateway_token", "网关 token", "text", "网关配置 apps[].token；留空表示不校验"],
+    ["gateway_rules", "网关规则（JSON）", "json", "null = 按指令表、别名和自动回复自动生成；非空数组则手写覆盖"],
     ["health_port", "本服务健康检查端口", "num", ""],
     ["timezone", "时区", "text", "本机缺时区数据时按 UTC+8 处理"],
   ]},

@@ -128,11 +128,16 @@ def test_welcome_context_drives_group_and_online(cfg, tmp_path):
 def test_offer_consumed_and_reply_sent(cfg, tmp_path):
     async def run():
         fake = FakeGateway([make_offer("签到")])
-        engine, _ = await run_app(fake, cfg, tmp_path / "gw1.db")
-        return fake, engine
+        engine, gateway = await run_app(fake, cfg, tmp_path / "gw1.db")
+        return fake, engine, gateway
 
-    fake, engine = asyncio.run(run())
-    assert fake.hello == {"type": "hello", "app_id": "social-game", "token": "t"}
+    fake, engine, gateway = asyncio.run(run())
+    assert fake.hello["type"] == "hello"
+    assert fake.hello["app_id"] == "social-game"
+    assert fake.hello["token"] == "t"
+    assert fake.hello["rules"] == gateway.rules
+    assert gateway.rules and gateway.status()["rules"] == {
+        "source": "auto", "count": len(gateway.rules)}
     assert fake.decisions[0]["action"] == "consume"
     assert fake.decisions[0]["offer_id"] == "o-1"
     assert "reply" not in fake.decisions[0]
@@ -140,6 +145,19 @@ def test_offer_consumed_and_reply_sent(cfg, tmp_path):
     assert fake.sends[0]["dispatch_id"] == "d-1"
     assert fake.sends[0]["request_id"].startswith("r-")
     assert engine.cursor == 1
+
+
+def test_rules_from_config_override(cfg, tmp_path):
+    async def run():
+        data = cfg.as_dict()
+        data["gateway_rules"] = [{"keywords": ["签到"]}]
+        fake = FakeGateway([make_offer("签到")])
+        engine, gateway = await run_app(fake, Config(data), tmp_path / "gw1b.db")
+        return fake, gateway
+
+    fake, gateway = asyncio.run(run())
+    assert fake.hello["rules"] == [{"keywords": ["签到"]}]
+    assert gateway.status()["rules"] == {"source": "config", "count": 1}
 
 
 def test_offer_skipped_without_reply(cfg, tmp_path):

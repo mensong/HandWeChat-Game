@@ -128,7 +128,7 @@ def _split_gift(rest: str, cfg: Config | None):
     return target, gift.name, count
 
 
-def _keyword_table(cfg: Config | None) -> list[tuple[str, str, str, str]]:
+def keyword_table(cfg: Config | None) -> list[tuple[str, str, str, str]]:
     """构建关键字表 [(keyword, command_name, kind, canonical_keyword)]。
 
     kind: exact（整句匹配）/ param（前缀 + @参数）。
@@ -257,7 +257,7 @@ def _parse_mention(rest: str, cfg: Config | None, table,
 def parse(text: str, cfg: Config | None = None,
           name_matcher=None) -> Command | None:
     compact = _compact(text)
-    table = _keyword_table(cfg)
+    table = keyword_table(cfg)
     exact_map = {kw: name for kw, name, kind, _ in table if kind == "exact"}
     if compact in exact_map:
         return Command(name=exact_map[compact])

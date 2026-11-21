@@ -15,6 +15,7 @@ from handwechat_gateway_sdk import (
 )
 from handwechat_gateway_sdk.client import GatewayAuthError
 
+from .rules import build_rules
 from .util import fmt_iso
 
 
@@ -64,10 +65,14 @@ class GatewayApp:
         self.skips = 0
         self.sends_ok = 0
         self.sends_failed = 0
+        configured = cfg.get("gateway_rules")
+        self.rules = list(configured) if configured is not None else build_rules(cfg)
+        self.rules_source = "config" if configured is not None else "auto"
         self.client = GatewayClient(
             app_id=cfg.get("gateway_app_id"),
             token=cfg.get("gateway_token"),
             url=cfg.get("gateway_url"),
+            rules=self.rules,
             on_offer=self.on_offer,
             on_connected=self.on_connected,
             on_pin_expired=self.on_pin_expired,
@@ -94,6 +99,7 @@ class GatewayApp:
             "sends_failed": self.sends_failed,
             "last_offer_at": self.last_offer_at,
             "last_error": self.last_error,
+            "rules": {"source": self.rules_source, "count": len(self.rules)},
             "context": None if ctx is None else {
                 "online": ctx.online,
                 "listener_running": ctx.listener_running,
@@ -119,9 +125,10 @@ class GatewayApp:
         ctx = self.client.context
         if ctx is not None:
             self._apply_context(ctx)
-        self.log.info("gateway connected: app_id=%s chat=%r listener=%s",
+        self.log.info("gateway connected: app_id=%s chat=%r listener=%s rules=%s(%d)",
                       self.cfg.get("gateway_app_id"),
-                      getattr(ctx, "chat_title", ""), getattr(ctx, "listener_running", None))
+                      getattr(ctx, "chat_title", ""), getattr(ctx, "listener_running", None),
+                      self.rules_source, len(self.rules))
         if not (ctx and ctx.chat_title):
             self.log.warning("网关 welcome.context 缺少 chat_title，群标题为空期间消息会被丢弃；"
                              "请确认网关已升级到支持 context 的版本")
