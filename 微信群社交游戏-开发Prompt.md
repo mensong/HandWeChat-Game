@@ -36,10 +36,10 @@
 
 | 方向 | 帧 | 用途 |
 | --- | --- | --- |
-| 应用 → 网关 | `hello` | 连接后第一帧，带 `app_id` / `token` |
+| 应用 → 网关 | `hello` | 连接后第一帧，带 `protocol: 2` / `app_id` / `token` / `rules` |
 | 网关 → 应用 | `welcome` | 握手成功，带 `pin` 与 `context`（微信在线、OCR 监听、当前聊天标题） |
 | 网关 → 应用 | `offer` | 询问一条新消息，必须在 `deadline_ms` 内回 `decision` |
-| 应用 → 网关 | `decision` | `consume`（消费该消息）/ `skip`（放行给下一个应用） |
+| 应用 → 网关 | `decision` | `consume`（消费该消息）/ `rewrite`（无改动，放行给下一个应用） |
 | 网关 → 应用 | `upstream_state` | 上游健康状态变化推送 |
 | 网关 → 应用 | `chat_changed` | 当前聊天标题或类型变化推送 |
 | 应用 → 网关 | `send` | 慢路径主动发送文本，带 `request_id` |
@@ -290,7 +290,7 @@ game/
    `welcome.pin` 只用于恢复置顶会话（本游戏是单轮指令，不使用置顶）。
 3. 网关只推送连接建立之后的实时消息，连接前的历史消息不会补发；服务重启不会重放扣费指令。
 4. 运行期逐条接收 `offer`，在 `deadline_ms` 内返回 `decision`：命中指令回 `consume`，
-   否则回 `skip` 放行给下一个应用。只处理 `is_latest=true` 的消息。
+   否则回 `rewrite` 放行给下一个应用。只处理 `is_latest=true` 的消息。
 5. 上游状态变化通过 `upstream_state`、`chat_changed` 推送；`online` / `listener_running`
    仅用于状态展示，OCR 监听的启动与重连由使用端负责，本服务不调用 `/api/v1/listener/*`。
 6. 网关断线由 SDK 自动重连（默认 3 秒）；不可恢复的关闭码（4009/4400/4401/4404）
@@ -302,7 +302,7 @@ game/
 1. 每个指令产生一个回复文本；多行用 `\n` 连接。
 2. 回复进入发送队列，由单独的发送协程按顺序消费，并受出站限速约束。
 3. 发送流程（慢路径，避免拖住后续询问）：
-   - 命中指令时先回 `decision: consume`（不带 `reply`），立即结束本次询问；
+   - 命中指令时先回 `decision: consume`（不带 `response`），立即结束本次询问；
    - 回复文本按队列顺序通过 `send` 帧发出，每帧带递增的 `request_id` 和来源 `dispatch_id`；
    - 网关回 `send_result`：`final=false` 表示已入队，`final=true` 的 `ok/status/error_code`
      是最终结果；
@@ -1336,7 +1336,7 @@ success = slave_score >= master_score
     "connected": true,
     "offers": 120,
     "consumes": 96,
-    "skips": 24,
+    "rewrites": 24,
     "sends_ok": 96,
     "sends_failed": 0,
     "context": {"online": true, "listener_running": true,
@@ -1405,7 +1405,7 @@ success = slave_score >= master_score
 | 25 | OCR 重复 | 同一 sender+content 5 秒内出现两次 | 只处理一次 |
 | 26 | 自己发送 | sender=`我` | 忽略 |
 | 27 | 无法识别昵称 | sender=`对方` | 忽略 |
-| 28 | 非最新消息 | 网关推送 `is_latest=false` 的 offer | 返回 skip，不处理，不回复 |
+| 28 | 非最新消息 | 网关推送 `is_latest=false` 的 offer | 返回 rewrite，不处理，不回复 |
 | 29 | 多群隔离 | 切换到另一个群，同名玩家 | 两个群的金币、奴隶关系互不影响 |
 | 30 | 发送失败 | `send_result` 最终 `ok=false` | 记日志与事件，不重试，业务数据保持 |
 | 31 | 网关认证失败 | 关闭码 4401（token 不匹配） | 记录 `gateway_auth_error`，停止重连，控制台可见 |

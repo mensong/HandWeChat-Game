@@ -1,2 +1,2 @@
 websockets>=15.0
-handwechat-gateway-sdk>=2026.11.20
+handwechat-gateway-sdk>=2026.11.22

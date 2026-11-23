@@ -62,7 +62,7 @@ class GatewayApp:
         self.last_offer_at: str | None = None
         self.offers = 0
         self.consumes = 0
-        self.skips = 0
+        self.rewrites = 0
         self.sends_ok = 0
         self.sends_failed = 0
         configured = cfg.get("gateway_rules")
@@ -94,7 +94,7 @@ class GatewayApp:
             "connected": bool(self.client.connected),
             "offers": self.offers,
             "consumes": self.consumes,
-            "skips": self.skips,
+            "rewrites": self.rewrites,
             "sends_ok": self.sends_ok,
             "sends_failed": self.sends_failed,
             "last_offer_at": self.last_offer_at,
@@ -182,8 +182,8 @@ class GatewayApp:
     def on_offer(self, offer: Offer) -> Decision:
         # 网关按消息逐条询问，同批里非最新条目仍按原直连规则丢弃。
         if offer.message.get("is_latest") is not True:
-            self.skips += 1
-            return Decision.skip()
+            self.rewrites += 1
+            return Decision.rewrite()
         self.offers += 1
         self.last_offer_at = fmt_iso(self.engine.clock())
         self.engine.set_cursor(offer.cursor)
@@ -192,12 +192,12 @@ class GatewayApp:
         except Exception:
             self.log.exception("gateway offer handler error: id=%s",
                                offer.message.get("id"))
-            self.skips += 1
-            return Decision.skip()
+            self.rewrites += 1
+            return Decision.rewrite()
         replies = self.collector.take()
         if not replies:
-            self.skips += 1
-            return Decision.skip()
+            self.rewrites += 1
+            return Decision.rewrite()
         # 先 consume 结束本轮询问，回复走慢路径 send，避免拖住后面的消息。
         if self.queue is not None:
             for text in replies:

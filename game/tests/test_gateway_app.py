@@ -16,7 +16,8 @@ from game.store import Store
 from game.util import make_clock
 
 WELCOME = {
-    "type": "welcome", "app_id": "social-game", "heartbeat_seconds": 20, "pin": None,
+    "type": "welcome", "app_id": "social-game", "protocol": 2,
+    "heartbeat_seconds": 20, "pin": None,
     "context": {"online": True, "listener_running": True, "attached": True,
                 "chat_title": "888 种田大队(32)", "chat_type": "group",
                 "health_ok": True, "upstream_connected": True},
@@ -133,6 +134,7 @@ def test_offer_consumed_and_reply_sent(cfg, tmp_path):
 
     fake, engine, gateway = asyncio.run(run())
     assert fake.hello["type"] == "hello"
+    assert fake.hello["protocol"] == 2
     assert fake.hello["app_id"] == "social-game"
     assert fake.hello["token"] == "t"
     assert fake.hello["rules"] == gateway.rules
@@ -160,14 +162,14 @@ def test_rules_from_config_override(cfg, tmp_path):
     assert gateway.status()["rules"] == {"source": "config", "count": 1}
 
 
-def test_offer_skipped_without_reply(cfg, tmp_path):
+def test_offer_rewritten_without_reply(cfg, tmp_path):
     async def run():
         fake = FakeGateway([make_offer("大家早安")])
         await run_app(fake, cfg, tmp_path / "gw2.db")
         return fake
 
     fake = asyncio.run(run())
-    assert fake.decisions[0]["action"] == "skip"
+    assert fake.decisions[0]["action"] == "rewrite"
     assert fake.sends == []
 
 
@@ -178,11 +180,11 @@ def test_offer_ignored_when_not_latest(cfg, tmp_path):
         return fake, engine, gateway
 
     fake, engine, gateway = asyncio.run(run())
-    assert fake.decisions[0]["action"] == "skip"
+    assert fake.decisions[0]["action"] == "rewrite"
     assert fake.sends == []
     assert engine.cursor == 0
     assert gateway.offers == 0
-    assert gateway.skips == 1
+    assert gateway.rewrites == 1
 
 
 def test_upstream_state_updates_context(cfg, tmp_path):

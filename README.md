@@ -42,11 +42,11 @@ pip install -r requirements.txt
 python -m game.main --config config/game_config.json --db data/game.db --log-dir data/logs
 ```
 
-6. 服务启动后会自动：连接网关（`WS /api/v1/gateway/ws/app`）→ 握手时在 `hello.rules`
+6. 服务启动后会自动：连接网关（`WS /api/v1/gateway/ws/app`，握手 `protocol: 2`）→ 在 `hello.rules`
    里上报本服务关心的消息（见「网关规则上报」）→ 用 `welcome.context`
    初始化微信在线、OCR 监听和群标题 → 接收网关逐条下发的 `offer`，只处理
    `is_latest=true` 的消息；有指令命中时回 `consume` 并通过网关代发回复，否则回
-   `skip` 放行给其他应用。连接建立前的历史消息不会补发。
+   `rewrite` 放行给其他应用。连接建立前的历史消息不会补发。
    收到 `upstream_state` / `chat_changed` 会同步更新在线状态和群标题；每次代发的
    `send_result` 回执用于记录最终发送结果。
 7. **Web 控制台**：`http://127.0.0.1:8001/`（`web_host` 默认 `0.0.0.0`，局域网
@@ -146,12 +146,12 @@ python -m game.simulator
 - **写法是前缀匹配**：指令用 `^[#＃]?\s*签到` 这类前缀正则，只容忍行首空白和 `#` 后空格；
   字间、匹配单元之间不插空白，规则更短。OCR 若在指令中间插了空格，网关不会下发到应用
   （应用侧解析仍会去空白，但消息已被挡在网关）。
-  宁可多放行（应用侧仍会 `skip`），不能把要处理的消息挡在网关。
+  宁可多放行（应用侧仍会 `rewrite`），不能把要处理的消息挡在网关。
 - `"gateway_rules": []` 表示全部匹配，只有兜底/通用机器人才这样配，业务应用不要用。
 - 运行状态里 `gateway.rules` 显示来源（`auto` / `config`）和条数；排查「收不到消息」时，
   先看网关 `/api/v1/gateway/status` 的 `apps[].rules.mode` 和 `apps[].groups`。
 - 规则表达不了 `is_latest`、`ignore_senders`、冷却等条件，这些仍在应用侧判断；置顶期间
-  网关会绕过规则下发同一聊天群的全部消息，`on_offer` 的 `skip` 兜底照旧。
+  网关会绕过规则下发同一聊天群的全部消息，`on_offer` 的 `rewrite` 兜底照旧。
 - **聊天金币影响**：`chat_coins_per_message` 只对真正下发到应用的消息生效。普通闲聊
   不再经过网关的规则筛选，因此不会再产生聊天收入，指令类消息照常。
 
