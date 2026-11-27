@@ -868,3 +868,16 @@ def test_mention_purchase_fallback(env):
 def test_mention_gift(env):
     reply = env.send("张三", "@李四送礼玫瑰")
     assert "送给 李四 ×1 玫瑰，花费 10 金币" in reply
+
+
+def test_bot_mention_exact_commands(env):
+    assert "签到成功" in env.send("张三", "@童声微蔓签到")
+    assert "张三 当前金币" in env.send("张三", "我的金币@童声微蔓")
+    reply = env.send("李四", "＠童声微蔓我的金币")
+    assert "李四 当前金币" in reply
+    assert "不支持@别人代执行" not in reply
+
+
+def test_bot_mention_alias(env_factory):
+    e = env_factory(bot_name="小助手", bot_name_aliases=["小帮 手"])
+    assert "签到成功" in e.send("张三", "@小帮手签到")

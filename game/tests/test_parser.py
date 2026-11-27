@@ -221,6 +221,35 @@ def test_mention_alone_ignored(cfg):
     assert parse(n("@李四你好"), cfg, m) is None
 
 
+def test_bot_mention_exact_commands(cfg):
+    m = _matcher(["李四"])
+    for text in ("@童声微蔓签到", "签到@童声微蔓",
+                 "#@童声微蔓签到", "＠童声微蔓签到"):
+        cmd = parse(n(text), cfg, m)
+        assert (cmd.name, cmd.mention) == ("sign_in", None), text
+    cmd = parse(n("@童声微蔓我的金币"), cfg, m)
+    assert (cmd.name, cmd.mention) == ("my_coins", None)
+    # 玩家提及不受影响，仍带 mention 交给引擎拒绝代执行
+    cmd = parse(n("@李四签到"), cfg, m)
+    assert (cmd.name, cmd.mention) == ("sign_in", "李四")
+
+
+def test_bot_mention_aliases(cfg):
+    from game.config import Config
+    cfg2 = Config({**cfg.as_dict(), "bot_name_aliases": ["小帮 手", "童声徽蔓"]})
+    # 别名里的空白被去掉后参与匹配
+    assert parse(n("@小帮手签到"), cfg2).name == "sign_in"
+    assert parse(n("签到@童声徽蔓"), cfg2).name == "sign_in"
+    assert parse(n("@童声微蔓签到"), cfg2).name == "sign_in"
+
+
+def test_bot_mention_requires_full_command(cfg):
+    m = _matcher(["李四"])
+    assert parse(n("@童声微蔓"), cfg, m) is None
+    assert parse(n("@童声微蔓你好"), cfg, m) is None
+    assert parse(n("签到@童声微蔓谢谢"), cfg, m) is None
+
+
 def test_command_aliases(cfg):
     from game.config import Config
     data = {**cfg.as_dict(), "command_aliases": {"购买奴隶": ["购买", "买下"],

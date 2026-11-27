@@ -83,6 +83,40 @@ def _compact(text: str) -> str:
     return re.sub(r"\s+", "", text)
 
 
+def bot_mention_names(cfg: Config | None) -> list[str]:
+    """@机器人 指令可识别的机器人名：bot_name + bot_name_aliases。
+
+    去空白、去空串、去重后按长度降序，避免短别名抢先剥掉长昵称的前缀。
+    """
+    if cfg is None:
+        return []
+    names = [cfg.get("bot_name")]
+    aliases = cfg.get("bot_name_aliases")
+    if isinstance(aliases, (list, tuple)):
+        names.extend(aliases)
+    compacted = {_compact(n) for n in names if isinstance(n, str)}
+    compacted.discard("")
+    return sorted(compacted, key=lambda n: (-len(n), n))
+
+
+def _strip_bot_mention(compact: str, cfg: Config | None) -> str | None:
+    """剥掉消息首尾的 @机器人 提及，返回剩余串；没有命中返回 None。
+
+    微信 @ 群成员时 OCR 得到 "@昵称"，昵称后的空格已由 _compact 去掉。
+    只剥提及、不判定剩余内容是否为指令，由调用方查整句指令表，
+    因此 @机器人转账@张三100 不会绕过"带参数指令须自带目标"的规则。
+    """
+    for name in bot_mention_names(cfg):
+        token = "@" + name
+        if len(compact) <= len(token):
+            continue
+        if compact.startswith(token):
+            return compact[len(token):]
+        if compact.endswith(token):
+            return compact[:-len(token)]
+    return None
+
+
 def _clean_target(raw: str) -> str | None:
     raw = raw.strip(TRAILING_PUNCT)
     if not raw or len(raw) > MAX_RAW_TARGET:
@@ -261,6 +295,11 @@ def parse(text: str, cfg: Config | None = None,
     exact_map = {kw: name for kw, name, kind, _ in table if kind == "exact"}
     if compact in exact_map:
         return Command(name=exact_map[compact])
+
+    # @机器人 的整句指令：@机器人我的金币 / 我的金币@机器人
+    stripped = _strip_bot_mention(compact, cfg)
+    if stripped is not None and stripped in exact_map:
+        return Command(name=exact_map[stripped])
 
     # @ 前缀形式：@用户名 指令（用户列表匹配优先，未注册目标按关键字切分）
     if compact.startswith("@") and name_matcher is not None:

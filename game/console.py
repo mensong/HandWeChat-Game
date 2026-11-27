@@ -189,6 +189,7 @@ const META = [
   ]},
   {group: "自动回复", items: [
     ["bot_name", "机器人昵称", "text", "配置中所有字符串可用 {bot} 引用；pattern 内自动转义"],
+    ["bot_name_aliases", "机器人提及别名", "json", "数组，供 @机器人 指令识别；填群昵称或 OCR 误读的写法，机器人昵称本身始终生效"],
     ["auto_replies", "回复规则（JSON 数组）", "json_text", '每项：name 名称、pattern 正则、replies 文案（字符串或数组）、cooldown_seconds 冷却、cooldown_key 冷却键（默认 {sender}）、enabled 启用、allow_ignored_senders 允许系统行；文案支持 {sender} {bot} 与 {msg1}..{msgN}'],
   ]},
   {group: "发送限速", items: [

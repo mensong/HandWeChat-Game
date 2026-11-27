@@ -23,6 +23,7 @@ DEFAULTS = {
     "reply_max_chars": 500,
 
     "bot_name": "",
+    "bot_name_aliases": [],
     "auto_replies": [],
 
     "send_max_per_minute": 15,
@@ -248,6 +249,10 @@ class Config:
             raise ConfigError("gateway_app_id must be a non-empty string")
         if not isinstance(d["gateway_token"], str):
             raise ConfigError("gateway_token must be a string")
+        aliases = d["bot_name_aliases"]
+        if not isinstance(aliases, list) or any(
+                not isinstance(a, str) or not a.strip() for a in aliases):
+            raise ConfigError("bot_name_aliases must be a list of non-empty strings")
         self._validate_gateway_rules(d["gateway_rules"])
         if d["slave_price_random_min"] < 0 or d["slave_price_random_max"] < d["slave_price_random_min"]:
             raise ConfigError("invalid slave_price_random range")
