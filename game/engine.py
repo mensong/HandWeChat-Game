@@ -107,6 +107,7 @@ class Engine:
         group = self.tracker.key
         if not group or self.paused:
             return
+        self._expire_marriage(group, now)
         mid = str(msg.get("id"))
         if not self._mark_seen_id(mid):
             self.log.info("dup message id: %s", mid)
@@ -171,6 +172,16 @@ class Engine:
 
     def _match_mention_name(self, prefix: str) -> str | None:
         return self.store.match_player_prefix(self.tracker.key or "", prefix)
+
+    def _expire_marriage(self, group: str, now) -> None:
+        """惰性结算超时求婚：没人发指令时彩礼不会一直悬着。"""
+        try:
+            self.store.expire_proposals(
+                group, now,
+                self.cfg.get("marriage_proposal_ttl_minutes") * 60,
+                self.cfg.get("marriage_force_window_minutes") * 60)
+        except Exception:
+            self.log.exception("expire proposals failed: group=%s", group)
 
     # ---------- internals ----------
 

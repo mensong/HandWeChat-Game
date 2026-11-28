@@ -95,6 +95,7 @@ python -m game.simulator
 | 魅力 | `我的魅力` / `魅力值`、`魅力榜`、`魅力系统` |
 | 礼物 | `送礼@用户名 礼物名 [数量]`、`礼物列表`、`礼物榜`、`礼物系统` |
 | 奴隶 | `购买奴隶@用户名`、`给他自由@用户名` / `给她自由@用户名`、`奴隶打工`、`我的奴隶`、`我要自由`、`调教@奴隶名`、`调教所有奴隶`、`赎身@用户名`、`奴隶系统` |
+| 结婚 | `求婚@用户名`（或 `@用户名求婚`）、`同意`、`拒绝`、`抢婚`、`逼婚`、`结婚系统` |
 
 - 无参数指令必须整句匹配；带参数指令必须以指令开头且带 `@`。
 - 无参数指令可直接 @ 机器人：`签到`、`@机器人签到`、`签到@机器人` 三种写法等价；
@@ -172,6 +173,13 @@ python -m game.simulator
 - 赎身：`ransom_price_coeff`（0~1，默认 1.0），价格 = 目标魅力 × 系数 × 随机[0,3]，
   允许 0 金币；赎身金支付给原主人，冷却 10 分钟/每日 10 次。
 - 礼物：`gifts` 目录（价格与魅力），8 种，10~5200 金币。
+- 结婚：`marriage_gift_base` 彩礼基数（默认 0.5）、`marriage_gift_random_min/max`
+  随机系数（0.1~3.0）、`marriage_min_gift` 最低彩礼；`marriage_auto_chance` 求婚/抢婚
+  直接成婚概率（0.05）；抢婚成功率 `marriage_steal_chance_win/equal/lose`
+  （0.30/0.20/0.10）、逼婚成功率 `marriage_force_chance_win/equal/lose`
+  （0.50/0.30/0.10）；逼婚窗口 `marriage_force_window_minutes`（1）、
+  求婚有效期 `marriage_proposal_ttl_minutes`（10）、
+  祝福字符画 `marriage_blessing`（字符串数组，一行一项）。
 - 打工事件：`work_events`，权重随机，正/负/零比例 60/30/10。
 - 限流：单用户指令间隔 2 秒、帮助冷却 60 秒、出站 15 条/分钟、回复上限 500 字符（超长拆条）。
 - 网关：`gateway_url`、`gateway_app_id`、`gateway_token`，需与网关配置的
@@ -186,7 +194,8 @@ python -m game.simulator
 
 ## 数据
 
-- SQLite：`data/game.db`（WAL），表：`players`、`gift_events`、`coin_ledger`、`daily_counters`。
+- SQLite：`data/game.db`（WAL），表：`players`、`gift_events`、`coin_ledger`、
+  `daily_counters`、`proposals`（求婚状态，一个对象同时一条，托管彩礼记在其中）。
 - 所有金币变动写入 `coin_ledger`，礼物写入 `gift_events`，每日次数写入 `daily_counters`。
 - 玩家按 `群标题 + 昵称` 隔离；群标题去掉尾部成员数（如 `(32)`）后作为 `group_key`。
 - 从未发言的玩家首次被 @ 时会创建"影子玩家"（`is_phantom=1`），本人发言后自动转正；
@@ -212,6 +221,8 @@ python -m game.simulator
 8. 网关按上报规则筛选后，普通闲聊不再下发到本服务：聊天金币只对命中规则的消息发放，
    规则没覆盖的自动回复也不会触发——新增自动回复规则时，`gateway_rules` 为 `null`
    会自动带上，手写覆盖时需自行同步。
+9. `同意` / `拒绝` / `抢婚` / `逼婚` 是整句匹配，群里单独发一句「同意」会触发结婚指令；
+   其它带前缀或后缀的消息不受影响。
 
 ## 指令别名
 

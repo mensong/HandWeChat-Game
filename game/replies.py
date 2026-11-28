@@ -189,3 +189,48 @@ def slaves_help() -> str:
             "7. 调教所有奴隶 —— 调教全部奴隶\n"
             "8. 赎身@奴隶名 —— 为别人的奴隶赎身\n"
             "说明：购买价格 = 目标魅力值 × 系数 × 随机系数；每个主人最多 5 个奴隶。")
+
+
+def propose_pending(sender: str, target: str, price: int) -> str:
+    return (f"{sender} 向 {target} 求婚，彩礼 {price} 金币已由系统托管。\n"
+            f"{target} 回复「同意」或「拒绝」，其他人可回复「抢婚」。")
+
+
+def steal_ok(sender: str, target: str, price: int, old_proposer: str) -> str:
+    return (f"抢婚成功！{sender} 抢下了对 {target} 的求婚，彩礼 {price} 金币已托管。\n"
+            f"{old_proposer} 的彩礼已全额退回。\n"
+            f"{target} 回复「同意」或「拒绝」，其他人仍可继续「抢婚」。")
+
+
+def steal_fail(sender: str, target: str, proposer: str) -> str:
+    return f"抢婚失败，{target} 的求婚仍由 {proposer} 保持。"
+
+
+def reject_ok(target: str, proposer: str, price: int, window_minutes: int) -> str:
+    return (f"{target} 拒绝了 {proposer} 的求婚。\n"
+            f"彩礼 {price} 金币已退回 {proposer}。\n"
+            f"（{window_minutes} 分钟内仍可被「逼婚」）")
+
+
+def force_fail(target: str, rejected: bool) -> str:
+    if rejected:
+        return f"逼婚失败，{target} 仍是自由身。"
+    return f"逼婚失败，{target} 的求婚仍在进行中。"
+
+
+def marriage_blessing(payer: str, target: str, price: int,
+                      art: Sequence[str], prefix: str = "") -> str:
+    lines = [f"{prefix}恭喜 {payer} 与 {target} 喜结连理！",
+             f"彩礼 {price} 金币已归 {target}。"]
+    lines.extend(art)
+    lines.append("愿你们百年好合～")
+    return "\n".join(lines)
+
+
+def marriage_help(window_minutes: int) -> str:
+    return ("结婚系统指令：\n"
+            "1. 求婚@用户名 —— 支付彩礼向对方求婚\n"
+            "2. 同意 / 拒绝 —— 回应向你发起的求婚\n"
+            "3. 抢婚 —— 抢下别人正在进行中的求婚\n"
+            f"4. 逼婚 —— 强行求婚（被拒后 {window_minutes} 分钟内仍有效）\n"
+            "说明：彩礼由系统托管，成婚归对象，被拒或超时退回；成婚需双方未婚。")

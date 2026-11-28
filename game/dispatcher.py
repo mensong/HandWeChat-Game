@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from .context import Ctx
-from .handlers import charm, coins, gifts, slaves
+from .handlers import charm, coins, gifts, marriage, slaves
 from .models import Command
 
 
@@ -54,4 +54,16 @@ class Dispatcher:
             return slaves.rebel(ctx, group, sender)
         if cmd.name == "slaves_help":
             return slaves.help(ctx, group)
+        if cmd.name == "propose":
+            return marriage.propose(ctx, group, sender, cmd.target)
+        if cmd.name == "marry_accept":
+            return marriage.accept(ctx, group, sender)
+        if cmd.name == "marry_reject":
+            return marriage.reject(ctx, group, sender)
+        if cmd.name == "marry_steal":
+            return marriage.steal(ctx, group, sender)
+        if cmd.name == "marry_force":
+            return marriage.force(ctx, group, sender)
+        if cmd.name == "marriage_help":
+            return marriage.help(ctx, group)
         return None

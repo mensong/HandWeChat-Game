@@ -85,6 +85,28 @@
   "gift_max_quantity": 99,
   "gift_daily_spend_limit": 20000,
   "gift_rank_days": 30,
+  "marriage_gift_base": 0.5,
+  "marriage_gift_random_min": 0.1,
+  "marriage_gift_random_max": 3,
+  "marriage_min_gift": 1,
+  "marriage_auto_chance": 0.05,
+  "marriage_steal_chance_win": 0.3,
+  "marriage_steal_chance_equal": 0.2,
+  "marriage_steal_chance_lose": 0.1,
+  "marriage_force_chance_win": 0.5,
+  "marriage_force_chance_equal": 0.3,
+  "marriage_force_chance_lose": 0.1,
+  "marriage_force_window_minutes": 1,
+  "marriage_proposal_ttl_minutes": 10,
+  "marriage_blessing": [
+    "   [玫瑰][玫瑰]            [玫瑰][玫瑰]",
+    "[玫瑰][玫瑰][玫瑰][玫瑰][玫瑰][玫瑰][玫瑰][玫瑰]",
+    "[玫瑰][玫瑰][玫瑰][玫瑰][玫瑰][玫瑰][玫瑰][玫瑰]",
+    "    [玫瑰][玫瑰][玫瑰][玫瑰][玫瑰][玫瑰][玫瑰]",
+    "        [玫瑰][玫瑰][玫瑰][玫瑰][玫瑰]",
+    "            [玫瑰][玫瑰][玫瑰]",
+    "                [玫瑰]"
+  ],
   "health_port": 8001,
   "gifts": [
     {

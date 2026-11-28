@@ -37,9 +37,14 @@ EXACT_COMMANDS = {
     "我要自由": "rebel",
     "调教所有奴隶": "train_all_slaves",
     "奴隶系统": "slaves_help",
+    "结婚系统": "marriage_help",
+    "同意": "marry_accept",
+    "拒绝": "marry_reject",
+    "抢婚": "marry_steal",
+    "逼婚": "marry_force",
 }
 
-HELP_COMMANDS = {"coins_help", "charm_help", "gifts_help", "slaves_help"}
+HELP_COMMANDS = {"coins_help", "charm_help", "gifts_help", "slaves_help", "marriage_help"}
 
 # 带目标参数的指令：canonical 关键字 → 命令名
 _PARAM_SPECS = [
@@ -50,6 +55,7 @@ _PARAM_SPECS = [
     ("给她自由", "release_slave"),
     ("调教", "train_slave"),
     ("赎身", "ransom_slave"),
+    ("求婚", "propose"),
 ]
 
 USAGE_KEYWORDS = [
@@ -60,6 +66,7 @@ USAGE_KEYWORDS = [
     ("给她自由", "给他自由@用户名"),
     ("调教", "调教@奴隶名"),
     ("赎身", "赎身@用户名"),
+    ("求婚", "求婚@用户名"),
 ]
 
 USAGE_HINT_TEMPLATE = "指令格式不对。用法：{usage}"
@@ -69,7 +76,7 @@ MAX_RAW_TARGET = 40
 # @ 前缀形式：@用户名 指令（如 @李四签到 / @李四购买奴隶）
 MENTION_QUERY_COMMANDS = {"my_coins", "my_charm", "my_slaves"}
 MENTION_TARGET_COMMANDS = {"purchase_slave", "release_slave", "train_slave",
-                           "ransom_slave", "transfer", "send_gift"}
+                           "ransom_slave", "transfer", "send_gift", "propose"}
 MENTION_CMD_LABELS = {
     "sign_in": "签到", "slave_work": "奴隶打工", "rebel": "我要自由",
     "my_coins": "我的金币", "my_charm": "我的魅力", "my_slaves": "我的奴隶",
@@ -77,6 +84,8 @@ MENTION_CMD_LABELS = {
     "gift_list": "礼物列表", "coins_help": "金币系统", "charm_help": "魅力系统",
     "gifts_help": "礼物系统", "slaves_help": "奴隶系统",
     "train_all_slaves": "调教所有奴隶",
+    "propose": "求婚", "marry_accept": "同意", "marry_reject": "拒绝",
+    "marry_steal": "抢婚", "marry_force": "逼婚", "marriage_help": "结婚系统",
 }
 
 def _compact(text: str) -> str:

@@ -7,12 +7,14 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Optional
 
-from .models import Player
+from .models import Player, Proposal
+from .util import parse_iso
 
 _PLAYER_COLS = ("group_key, name, coins, charm, charm_anchor, master, enslaved_at, "
                 "is_phantom, created_at, last_seen_at, last_signin_date, signin_streak, "
                 "last_work_at, last_rebel_at, last_interact_at, last_ransom_at, "
-                "total_charm_gained, total_gift_spent, total_gift_charm")
+                "total_charm_gained, total_gift_spent, total_gift_charm, "
+                "spouse, married_at")
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS players (
@@ -32,6 +34,8 @@ CREATE TABLE IF NOT EXISTS players (
   last_rebel_at    TEXT,
   last_interact_at TEXT,
   last_ransom_at   TEXT,
+  spouse           TEXT,
+  married_at       TEXT,
   total_charm_gained REAL  NOT NULL DEFAULT 0,
   total_gift_spent   INTEGER NOT NULL DEFAULT 0,
   total_gift_charm   REAL  NOT NULL DEFAULT 0,
@@ -77,6 +81,19 @@ CREATE TABLE IF NOT EXISTS daily_counters (
   amount    INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (group_key, date, name, action)
 );
+
+CREATE TABLE IF NOT EXISTS proposals (
+  group_key   TEXT    NOT NULL,
+  target      TEXT    NOT NULL,
+  proposer    TEXT    NOT NULL,
+  bride_price INTEGER NOT NULL,
+  status      TEXT    NOT NULL DEFAULT 'pending',
+  created_at  TEXT    NOT NULL,
+  rejected_at TEXT,
+  PRIMARY KEY (group_key, target)
+);
+
+CREATE INDEX IF NOT EXISTS idx_proposals_proposer ON proposals(group_key, proposer);
 """
 
 
@@ -96,6 +113,10 @@ class Store:
                 self._conn.execute("ALTER TABLE players ADD COLUMN last_interact_at TEXT")
             if "last_ransom_at" not in cols:
                 self._conn.execute("ALTER TABLE players ADD COLUMN last_ransom_at TEXT")
+            if "spouse" not in cols:
+                self._conn.execute("ALTER TABLE players ADD COLUMN spouse TEXT")
+            if "married_at" not in cols:
+                self._conn.execute("ALTER TABLE players ADD COLUMN married_at TEXT")
 
     def close(self) -> None:
         with self._lock:
@@ -282,7 +303,8 @@ class Store:
                       purge_history: bool = False) -> dict:
         """删除单个玩家：名下奴隶自动恢复自由身，每日计数器一并删除。
 
-        purge_history=True 时连同该玩家相关的金币流水与礼物记录一起删除。
+        purge_history=True 时连同该玩家相关的金币流水与礼物记录一起删除；
+        涉及该玩家的求婚记录一并清除（托管中的彩礼不再退回）。
         """
         with self.transaction():
             exists = self._conn.execute(
@@ -299,6 +321,10 @@ class Store:
             self._conn.execute(
                 "DELETE FROM daily_counters WHERE group_key=? AND name=?",
                 (group, name),
+            )
+            self._conn.execute(
+                "DELETE FROM proposals WHERE group_key=? AND (target=? OR proposer=?)",
+                (group, name, name),
             )
             if purge_history:
                 self._conn.execute(
@@ -360,6 +386,9 @@ class Store:
             ).fetchone()["c"]
             self._conn.execute(
                 "DELETE FROM daily_counters WHERE group_key=?", (group,),
+            )
+            self._conn.execute(
+                "DELETE FROM proposals WHERE group_key=?", (group,),
             )
             if purge_history:
                 self._conn.execute(
@@ -489,6 +518,137 @@ class Store:
                 f"UPDATE players SET {field}=? WHERE group_key=? AND name=?",
                 (value, group, name),
             )
+
+    # ---------- marriage ----------
+
+    def set_spouse(self, group: str, name: str, spouse: Optional[str],
+                   ts_iso: str) -> None:
+        with self._lock:
+            self._conn.execute(
+                "UPDATE players SET spouse=?, married_at=? WHERE group_key=? AND name=?",
+                (spouse, ts_iso if spouse else None, group, name),
+            )
+
+    @staticmethod
+    def _proposal(row) -> Optional[Proposal]:
+        if row is None:
+            return None
+        return Proposal(**{k: row[k] for k in row.keys()})
+
+    _PROPOSAL_COLS = "group_key, target, proposer, bride_price, status, created_at, rejected_at"
+
+    def get_proposal(self, group: str, target: str) -> Optional[Proposal]:
+        """取目标名下的待处理求婚（一个对象同时只有一条）。"""
+        with self._lock:
+            row = self._conn.execute(
+                f"SELECT {self._PROPOSAL_COLS} FROM proposals "
+                "WHERE group_key=? AND target=? AND status='pending'",
+                (group, target),
+            ).fetchone()
+        return self._proposal(row)
+
+    def proposal_by_proposer(self, group: str, proposer: str) -> Optional[Proposal]:
+        with self._lock:
+            row = self._conn.execute(
+                f"SELECT {self._PROPOSAL_COLS} FROM proposals "
+                "WHERE group_key=? AND proposer=? AND status='pending'",
+                (group, proposer),
+            ).fetchone()
+        return self._proposal(row)
+
+    def latest_forceable(self, group: str, cutoff_iso: str) -> Optional[Proposal]:
+        """最近一条可逼婚的求婚：待处理，或被拒后仍在窗口内。"""
+        with self._lock:
+            row = self._conn.execute(
+                f"SELECT {self._PROPOSAL_COLS} FROM proposals "
+                "WHERE group_key=? AND (status='pending' "
+                "  OR (status='rejected' AND rejected_at>=?)) "
+                "ORDER BY created_at DESC LIMIT 1",
+                (group, cutoff_iso),
+            ).fetchone()
+        return self._proposal(row)
+
+    def latest_pending(self, group: str) -> Optional[Proposal]:
+        with self._lock:
+            row = self._conn.execute(
+                f"SELECT {self._PROPOSAL_COLS} FROM proposals "
+                "WHERE group_key=? AND status='pending' "
+                "ORDER BY created_at DESC LIMIT 1",
+                (group,),
+            ).fetchone()
+        return self._proposal(row)
+
+    def create_proposal(self, group: str, target: str, proposer: str,
+                        bride_price: int, ts_iso: str) -> None:
+        with self._lock:
+            self._conn.execute(
+                """INSERT OR REPLACE INTO proposals
+                   (group_key, target, proposer, bride_price, status, created_at, rejected_at)
+                   VALUES (?, ?, ?, ?, 'pending', ?, NULL)""",
+                (group, target, proposer, bride_price, ts_iso),
+            )
+
+    def replace_proposal(self, group: str, target: str, proposer: str,
+                         bride_price: int, ts_iso: str) -> None:
+        with self._lock:
+            self._conn.execute(
+                """UPDATE proposals SET proposer=?, bride_price=?, status='pending',
+                          created_at=?, rejected_at=NULL
+                   WHERE group_key=? AND target=?""",
+                (proposer, bride_price, ts_iso, group, target),
+            )
+
+    def mark_rejected(self, group: str, target: str, ts_iso: str) -> None:
+        with self._lock:
+            self._conn.execute(
+                "UPDATE proposals SET status='rejected', rejected_at=? "
+                "WHERE group_key=? AND target=?",
+                (ts_iso, group, target),
+            )
+
+    def drop_proposal(self, group: str, target: str) -> None:
+        with self._lock:
+            self._conn.execute(
+                "DELETE FROM proposals WHERE group_key=? AND target=?", (group, target),
+            )
+
+    def expire_proposals(self, group: str, now, ttl_seconds: float,
+                         window_seconds: float) -> dict:
+        """惰性结算：待处理求婚超时退款关闭，被拒求婚过窗口后清除。
+
+        每条消息都会调用，所以先只读一次，确实有过期的才开写事务。
+        """
+        with self._lock:
+            rows = self._conn.execute(
+                f"SELECT {self._PROPOSAL_COLS} FROM proposals "
+                "WHERE group_key=? AND status IN ('pending', 'rejected')",
+                (group,),
+            ).fetchall()
+        due = []
+        for row in rows:
+            p = self._proposal(row)
+            if p.status == "pending":
+                if (now - parse_iso(p.created_at)).total_seconds() >= ttl_seconds:
+                    due.append(p)
+            elif p.rejected_at and \
+                    (now - parse_iso(p.rejected_at)).total_seconds() >= window_seconds:
+                due.append(p)
+        if not due:
+            return {"refunded": [], "removed": 0}
+        refunded = []
+        ts = now.isoformat(timespec="seconds")
+        with self.transaction():
+            for p in due:
+                if p.status == "pending":
+                    self.adjust_coins(group, p.proposer, p.bride_price,
+                                      "marriage_refund", p.target, ts)
+                    refunded.append({"target": p.target, "proposer": p.proposer,
+                                     "amount": p.bride_price})
+                self._conn.execute(
+                    "DELETE FROM proposals WHERE group_key=? AND target=?",
+                    (group, p.target),
+                )
+        return {"refunded": refunded, "removed": len(due)}
 
     # ---------- gifts ----------
 

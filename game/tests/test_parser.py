@@ -250,6 +250,19 @@ def test_bot_mention_requires_full_command(cfg):
     assert parse(n("签到@童声微蔓谢谢"), cfg, m) is None
 
 
+def test_marriage_commands(cfg):
+    assert p(cfg, "结婚系统").name == "marriage_help"
+    assert p(cfg, "同意").name == "marry_accept"
+    assert p(cfg, "拒绝").name == "marry_reject"
+    assert p(cfg, "抢婚").name == "marry_steal"
+    assert p(cfg, "逼婚").name == "marry_force"
+    assert p(cfg, "求婚@张三").target == "张三"
+    m = _matcher(["张三"])
+    cmd = parse(n("@张三求婚"), cfg, m)
+    assert (cmd.name, cmd.target) == ("propose", "张三")
+    assert usage_hint("求婚") == "指令格式不对。用法：求婚@用户名"
+
+
 def test_command_aliases(cfg):
     from game.config import Config
     data = {**cfg.as_dict(), "command_aliases": {"购买奴隶": ["购买", "买下"],

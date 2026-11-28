@@ -87,6 +87,29 @@ DEFAULTS = {
     "gift_daily_spend_limit": 20000,
     "gift_rank_days": 30,
 
+    "marriage_gift_base": 0.5,
+    "marriage_gift_random_min": 0.1,
+    "marriage_gift_random_max": 3.0,
+    "marriage_min_gift": 1,
+    "marriage_auto_chance": 0.05,
+    "marriage_steal_chance_win": 0.30,
+    "marriage_steal_chance_equal": 0.20,
+    "marriage_steal_chance_lose": 0.10,
+    "marriage_force_chance_win": 0.50,
+    "marriage_force_chance_equal": 0.30,
+    "marriage_force_chance_lose": 0.10,
+    "marriage_force_window_minutes": 1,
+    "marriage_proposal_ttl_minutes": 10,
+    "marriage_blessing": [
+        "   [玫瑰][玫瑰]            [玫瑰][玫瑰]",
+        "[玫瑰][玫瑰][玫瑰][玫瑰][玫瑰][玫瑰][玫瑰][玫瑰]",
+        "[玫瑰][玫瑰][玫瑰][玫瑰][玫瑰][玫瑰][玫瑰][玫瑰]",
+        "    [玫瑰][玫瑰][玫瑰][玫瑰][玫瑰][玫瑰][玫瑰]",
+        "        [玫瑰][玫瑰][玫瑰][玫瑰][玫瑰]",
+        "            [玫瑰][玫瑰][玫瑰]",
+        "                [玫瑰]",
+    ],
+
     "health_port": 8001,
     "web_host": "0.0.0.0",
 
@@ -106,6 +129,8 @@ _INT_KEYS = [
     "interaction_charm_min", "interaction_charm_max",
     "interaction_cooldown_minutes", "interaction_max_per_day",
     "ransom_cooldown_minutes", "ransom_max_per_day",
+    "marriage_min_gift", "marriage_force_window_minutes",
+    "marriage_proposal_ttl_minutes",
 ]
 _FLOAT_KEYS = [
     "charm_base", "charm_decay_rate", "slave_price_coeff", "slave_price_random_min",
@@ -113,9 +138,14 @@ _FLOAT_KEYS = [
     "rebel_master_coeff", "rebel_slave_coeff",
     "interaction_weight_coins", "interaction_weight_charm", "interaction_weight_both",
     "ransom_price_coeff",
+    "marriage_gift_base", "marriage_gift_random_min", "marriage_gift_random_max",
+    "marriage_auto_chance",
+    "marriage_steal_chance_win", "marriage_steal_chance_equal", "marriage_steal_chance_lose",
+    "marriage_force_chance_win", "marriage_force_chance_equal", "marriage_force_chance_lose",
 ]
 _POSITIVE_FLOAT_KEYS = [
     "slave_price_coeff", "release_reward_coeff", "rebel_master_coeff", "rebel_slave_coeff",
+    "marriage_gift_base",
 ]
 
 
@@ -320,6 +350,25 @@ class Config:
             raise ConfigError("ransom_cooldown_minutes must be >= 0")
         if d["ransom_max_per_day"] < 1:
             raise ConfigError("ransom_max_per_day must be >= 1")
+        for k in ("marriage_auto_chance", "marriage_steal_chance_win",
+                  "marriage_steal_chance_equal", "marriage_steal_chance_lose",
+                  "marriage_force_chance_win", "marriage_force_chance_equal",
+                  "marriage_force_chance_lose"):
+            if not 0 <= d[k] <= 1:
+                raise ConfigError(f"{k} must be in [0, 1]")
+        if d["marriage_gift_random_min"] < 0 \
+                or d["marriage_gift_random_max"] < d["marriage_gift_random_min"]:
+            raise ConfigError("invalid marriage_gift_random range")
+        if d["marriage_min_gift"] < 0:
+            raise ConfigError("marriage_min_gift must be >= 0")
+        if d["marriage_force_window_minutes"] <= 0 \
+                or d["marriage_proposal_ttl_minutes"] <= 0:
+            raise ConfigError("marriage_force_window_minutes / "
+                              "marriage_proposal_ttl_minutes must be > 0")
+        blessing = d["marriage_blessing"]
+        if not isinstance(blessing, list) or not blessing or any(
+                not isinstance(line, str) or not line for line in blessing):
+            raise ConfigError("marriage_blessing must be a non-empty list of non-empty strings")
 
     @staticmethod
     def _validate_gateway_rules(rules) -> None:

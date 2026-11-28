@@ -27,6 +27,19 @@ class Player:
     total_charm_gained: float
     total_gift_spent: int
     total_gift_charm: float
+    spouse: Optional[str] = None
+    married_at: Optional[str] = None
+
+
+@dataclass
+class Proposal:
+    group_key: str
+    target: str
+    proposer: str
+    bride_price: int
+    status: str
+    created_at: str
+    rejected_at: Optional[str] = None
 
 
 @dataclass

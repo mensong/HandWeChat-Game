@@ -253,6 +253,22 @@ const META = [
     ["gift_daily_spend_limit", "每日送礼花费上限", "num", ""],
     ["gift_rank_days", "礼物榜统计天数", "num", ""],
   ]},
+  {group: "结婚", items: [
+    ["marriage_gift_base", "彩礼基数", "num", "彩礼 = 对象魅力 × 基数 × 随机系数"],
+    ["marriage_gift_random_min", "彩礼随机系数下限", "num", ""],
+    ["marriage_gift_random_max", "彩礼随机系数上限", "num", ""],
+    ["marriage_min_gift", "彩礼最低金额", "num", ""],
+    ["marriage_auto_chance", "求婚/抢婚直接成婚概率（0~1）", "num", ""],
+    ["marriage_steal_chance_win", "抢婚成功率：魅力高于对象（0~1）", "num", ""],
+    ["marriage_steal_chance_equal", "抢婚成功率：魅力等于对象（0~1）", "num", ""],
+    ["marriage_steal_chance_lose", "抢婚成功率：魅力低于对象（0~1）", "num", ""],
+    ["marriage_force_chance_win", "逼婚成功率：魅力高于对象（0~1）", "num", ""],
+    ["marriage_force_chance_equal", "逼婚成功率：魅力等于对象（0~1）", "num", ""],
+    ["marriage_force_chance_lose", "逼婚成功率：魅力低于对象（0~1）", "num", ""],
+    ["marriage_force_window_minutes", "被拒后可逼婚窗口（分钟）", "num", ""],
+    ["marriage_proposal_ttl_minutes", "求婚有效期（分钟）", "num", ""],
+    ["marriage_blessing", "成婚祝福字符画（JSON 数组，一行一项）", "json", ""],
+  ]},
 ];
 const GIFT_COLS = [["id", "ID"], ["name", "名称"], ["aliases", "别名（逗号分隔）"],
                    ["price", "价格"], ["charm", "魅力"]];
